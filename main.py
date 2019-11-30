@@ -62,7 +62,7 @@ def get_7_gradient_maps(imgRGB):
     t = np.ones(y.shape) * 3
     # what is happening in below 3 lines?
     y = np.divide(y, np.mean(((abs(y)) ** a)) ** (1 / a))
-    y = np.divide(y, np.mean(np.power(np.min(abs(y), t), a)) ** (1 / a))
+    y = np.divide(y, np.mean((np.minimum(abs(y), t)) ** a) ** (1 / a))
     imgNorm = y * np.tanh(np.divide(y, t))
 
     imgLAB = rgb2lab(img)
@@ -82,23 +82,23 @@ def get_7_gradient_maps(imgRGB):
     laplacian = laplace(gray)
 
     l1 = np.array([[0, -1, 0], [0, 2, 0], [0, -1, 0]])
-    l2 = np.array([[0, 0, 0][-1, 2, -1][0, 0, 0]])
+    l2 = np.array([[0, 0, 0], [-1, 2, -1], [0, 0, 0]])
     lapX = ndimage.convolve(gray, l1)
     lapY = ndimage.convolve(gray, l2)
 
     # what is going on below lines why are there hardcoded values like 4,5,6
-    lapY[:, 1:3] = lapY[:, [6, 5, 4]]
-    lapY[:, -2:] = lapY[:, [-3, -4 - 5]]
-    lapX[1:3, :] = lapX[[6, 5, 4], :]
-    lapX[-2:, :] = lapX[[-3, -4 - 5], :]
-    lapX = lapX[2:-1, 2:-1]
-    lapY = lapY[2:-1, 2:-1]
+    # lapY[:, 1:3] = lapY[:, [6, 5, 4]]
+    # lapY[:, -2:] = lapY[:, [-3, -4 - 5]]
+    # lapX[1:3, :] = lapX[[6, 5, 4], :]
+    # lapX[-2:, :] = lapX[[-3, -4 - 5], :]
+    # lapX = lapX[2:-1, 2:-1]
+    # lapY = lapY[2:-1, 2:-1]
 
     # return labNorm, imgNorm, imgGx, imgGy, laplacian, lapX, lapY
     return np.array([labNorm, imgNorm, imgGx, imgGy, laplacian, lapX, lapY])
 
 
-def extract_superpixel_features(stats, img, adj_matrix):
+def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
 
     imgHSV = rgb2hsv(img)
     imgLAB = rgb2lab(img)
@@ -114,6 +114,16 @@ def extract_superpixel_features(stats, img, adj_matrix):
     imgRGBnorm = np.divide(imgRGB, imgRGBsum)
 
     gradient_maps = get_7_gradient_maps(imgRGB)
+    minCoverArea = 0
+    color_space_matrix = np.array(
+        [imgRGB, imgRGBnorm, imgLAB, imgHSV, imgYCbCr, imgYIQ])
+
+    feature_count = 450
+    superpixel_features = np.zeros((len(stats), feature_count))
+    for i, s in enumerate(stats):
+        # what second condition means in matlab code?
+        if s.area > 0:
+            print('')
 
 
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
@@ -124,11 +134,15 @@ compactness = 8
 img = plt.imread(fname)
 img = resize(img, (img_height, img.shape[1]))
 segments = slic(img, n_segments=num_superpixel, compactness=compactness)
+
+# plt.imshow(mark_boundaries(img, segments))
+# plt.show()
+
 adj_matrix = get_adjacency_matrix(segments)
 stats = regionprops(segments)
 
-extract_superpixel_features(stats, img, adj_matrix)
+binaryCropMask = np.ones(img.shape)
+extract_superpixel_features(stats, img, adj_matrix, binaryCropMask)
 
-print (len(stats))
-
+print(len(stats))
 print(adj_matrix)
