@@ -1,8 +1,15 @@
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
+from skimage.exposure import adjust_gamma
+from skimage.measure import regionprops
+from skimage.filters import gaussian, sobel_h, sobel_v
+from skimage.color import rgb2gray, rgb2hsv, rgb2lab, rgb2xyz, rgb2ycbcr, rgb2yiq
 import matplotlib.pyplot as plt
 from skimage.transform import resize
 import numpy as np
+from math import ceil
+
+PIXEL_MAX_VAL = 255
 
 
 def get_adjacency_matrix(segments: np.array):
@@ -32,8 +39,61 @@ def get_adjacency_matrix(segments: np.array):
     return r
 
 
-def extract_features():
-    pass
+def get_differenceOfGaussians(img, sigma1, sigma2):
+    filter1_size = 2 * ceil(3 * sigma1) + 1
+    filter2_size = 2 * ceil(3 * sigma2) + 1
+
+    min_val = img.min()
+    max_val = img.max()
+    img = (img - min_val) / (max_val - min_val) * 255
+
+    return gaussian(img, sigma=sigma1) - gaussian(img, sigma=sigma2)
+
+
+def get_2D_features(imgRGB):
+    gamma = 0.4
+    y = rgb2gray(adjust_gamma(imgRGB, gamma))
+    gray = np.copy(y)
+    y = get_differenceOfGaussians(y, 1, 2)
+    # what is a?
+    a = 0.1
+    # why 3 ? why not 4?
+    t = np.ones(y.shape) * 3
+    # what is happening in below 3 lines?
+    y = np.divide(y, np.mean(((abs(y))** a)) ** (1 / a) )
+    y = np.divide(y, np.mean(np.power(np.min(abs(y), t), a)) ** (1 / a) )
+    imgNorm = y * np.tanh(np.divide(y, t))
+
+    imgLAB = rgb2lab(img)
+    L = imgLAB[:, :, 0]
+    A = imgLAB[:, :, 1]
+    B = imgLAB[:, :, 2]
+    # why 2.2?
+    _lambda = 2.2
+    S = np.sqrt( (L - np.mean(L))**2 + (_lambda * (A - np.mean(A)))**2 +  (_lambda * (B - np.mean(B)))**2 )
+    Smax = np.max(S)
+    Smin = np.max(S)
+    labNorm = (S - Smin) / (Smax - Smin)
+
+    imgGx = sobel_h(gray)
+    imgGy = sobel_v(gray)
+
+    return labNorm, imgNorm
+
+def extract_superpixel_features(stats, img, adj_matrix):
+
+    imgHSV = rgb2hsv(img)
+    imgLAB = rgb2lab(img)
+    imgXYZ = rgb2xyz(img)
+    imgYCbCr = rgb2ycbcr(img) / PIXEL_MAX_VAL
+    imgYIQ = rgb2yiq(img)
+    imgGray = rgb2gray(img)
+
+    # set pixcel range to [0,1]
+    imgRGB = img / PIXEL_MAX_VAL
+    imgRGBsum = np.sqrt(np.sum(np.square(imgRGB), axis=0))
+    # broadcasting will make division in 3 channels
+    imgRGBnorm = np.divide(imgRGB, imgRGBsum)
 
 
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
@@ -45,5 +105,6 @@ img = plt.imread(fname)
 img = resize(img, (img_height, img.shape[1]))
 segments = slic(img, n_segments=num_superpixel, compactness=compactness)
 adj_matrix = get_adjacency_matrix(segments)
+stats = regionprops(segments)
 
 print(adj_matrix)
