@@ -7,13 +7,14 @@ from skimage.color import rgb2gray, rgb2hsv, rgb2lab, rgb2xyz, rgb2ycbcr, rgb2yi
 import matplotlib.pyplot as plt
 from skimage.transform import resize
 import numpy as np
-from math import ceil
+from math import ceil, atan
 from scipy import ndimage
 
 PIXEL_MAX_VAL = 255
 
 
 def get_adjacency_matrix(segments: np.array):
+    # slic returns labels from 0 to n
     n = segments.max() + 1
     r = np.zeros((n, n))
 
@@ -107,7 +108,7 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
     imgYIQ = rgb2yiq(img)
     imgGray = rgb2gray(img)
 
-    # set pixcel range to [0,1]
+    # set pixel range to [0,1]
     imgRGB = img / PIXEL_MAX_VAL
     imgRGBsum = np.sqrt(np.sum(np.square(imgRGB), axis=0))
     # broadcasting will make division in 3 channels
@@ -125,7 +126,52 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
         if s.area > 0:
             print('')
 
+# superpix is 0 based label of superpixel
+# stats is ordered by label (asc)
 
+
+def get8neighbors4_superpixel(stats, adj_matrix, superpix):
+    neighborhood = adj_matrix[superpix, superpix + 1:]
+    neighbor_idxs = np.nonzero(neighborhood)
+
+    up_neighbors = []
+    up_cnt = 0
+    down_neighbors = []
+    down_cnt = 0
+    right_neighbors = []
+    right_cnt = 0
+    left_neighbors = []
+    left_cnt = 0
+
+    slope_threshold = 0.5
+
+    for nei in neighbor_idxs:
+        x1, y1 = stats(superpix).centroid
+        x2, y2 = stats(nei).centroid
+        slope = abs((y2 - y1) / (x2 - x1))
+        if slope > slope_threshold:
+            if y2 > y1:
+                up_neighbors.append({'label': nei, 'area': stats(nei).area})
+                up_cnt = up_cnt + 1
+            else:
+                down_neighbors.append({'label': nei, 'area': stats(nei).area})
+                down_cnt = down_cnt + 1
+        else:
+            if x2 > x1:
+                right_neighbors.append({'label': nei, 'area': stats(nei).area})
+                right_cnt = right_cnt + 1
+            else:
+                left_neighbors.append({'label': nei, 'area': stats(nei).area})
+                left_cnt = left_cnt + 1
+
+    up_neighbors = up_neighbors.sort(key=lambda x: x['area'])
+    down_neighbors = down_neighbors.sort(key=lambda x: x['area'])
+    right_neighbors = right_neighbors.sort(key=lambda x: x['area'])
+    left_neighbors = left_neighbors.sort(key=lambda x: x['area'])
+    
+    
+    
+    
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
 num_superpixel = 200
 img_height = 200
@@ -139,7 +185,8 @@ segments = slic(img, n_segments=num_superpixel, compactness=compactness)
 # plt.show()
 
 adj_matrix = get_adjacency_matrix(segments)
-stats = regionprops(segments)
+# region props ignore labels with 0 but slic labels are 0 indexed
+stats = regionprops(segments + 1)
 
 binaryCropMask = np.ones(img.shape)
 extract_superpixel_features(stats, img, adj_matrix, binaryCropMask)
