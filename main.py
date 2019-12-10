@@ -75,7 +75,7 @@ def get_7_gradient_maps(imgRGB):
     S = np.sqrt((L - np.mean(L))**2 + (_lambda * (A - np.mean(A)))
                 ** 2 + (_lambda * (B - np.mean(B)))**2)
     Smax = np.max(S)
-    Smin = np.max(S)
+    Smin = np.min(S)
     labNorm = (S - Smin) / (Smax - Smin)
 
     imgGx = sobel_h(gray)
@@ -103,10 +103,8 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
 
     imgHSV = rgb2hsv(img)
     imgLAB = rgb2lab(img)
-    imgXYZ = rgb2xyz(img)
     imgYCbCr = rgb2ycbcr(img) / PIXEL_MAX_VAL
     imgYIQ = rgb2yiq(img)
-    imgGray = rgb2gray(img)
 
     # set pixel range to [0,1]
     imgRGB = img / PIXEL_MAX_VAL
@@ -116,15 +114,38 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
 
     gradient_maps = get_7_gradient_maps(imgRGB)
     minCoverArea = 0
-    color_space_matrix = np.array(
-        [imgRGB, imgRGBnorm, imgLAB, imgHSV, imgYCbCr, imgYIQ])
+    color_spaces = [imgRGB, imgRGBnorm, imgLAB, imgHSV, imgYCbCr, imgYIQ]
 
-    feature_count = 450
-    superpixel_features = np.zeros((len(stats), feature_count))
+    features = []
     for i, s in enumerate(stats):
-        # what second condition means in matlab code?
-        if s.area > 0:
-            print('')
+        # get features of superpixels inside a mask
+        if s.area <= 0 or np.mean(binaryCropMask[s.coords[:, 0], s.coords[:, 1]]) <= minCoverArea:
+            continue
+        feature = []
+        # put coords of superpixel as a feature
+        feature.append(s.centroid[0])
+        feature.append(s.centroid[1])
+
+        # get features of 8 neighbors and itself
+        neighbors = get8neighbors4_superpixel(stats, adj_matrix, i)
+        neighbors.append(i)
+        for color_space in color_spaces:
+            for nei in neighbors:
+                for channel in range(3):
+                    coords = stats[nei].coords
+                    color_values = color_space[coords[:,0], coords[:, 1], channel]
+                    feature.append(np.mean(color_values))
+                    feature.append(np.var(color_values))
+
+        for gradient_map in gradient_maps:
+            for nei in neighbors:
+                coords = stats[nei].coords
+                values = gradient_map[coords[:, 0], coords[:, 1]]
+                feature.append(np.mean(values))
+                feature.append(np.var(values))
+        features.append(feature)
+
+    return features
 
 # superpix is 0 based label of superpixel
 # stats is ordered by label (asc)
@@ -132,7 +153,7 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
 
 def get8neighbors4_superpixel(stats, adj_matrix, superpix):
     neighborhood = adj_matrix[superpix, superpix + 1:]
-    neighbor_idxs = np.nonzero(neighborhood)
+    neighbor_idxs = np.nonzero(neighborhood)[0]
 
     up_neighbors = []
     up_cnt = 0
@@ -146,32 +167,54 @@ def get8neighbors4_superpixel(stats, adj_matrix, superpix):
     slope_threshold = 0.5
 
     for nei in neighbor_idxs:
-        x1, y1 = stats(superpix).centroid
-        x2, y2 = stats(nei).centroid
+        x1, y1 = stats[superpix].centroid
+        x2, y2 = stats[nei].centroid
         slope = abs((y2 - y1) / (x2 - x1))
         if slope > slope_threshold:
             if y2 > y1:
-                up_neighbors.append({'label': nei, 'area': stats(nei).area})
+                up_neighbors.append({'idx': nei, 'area': stats[nei].area})
                 up_cnt = up_cnt + 1
             else:
-                down_neighbors.append({'label': nei, 'area': stats(nei).area})
+                down_neighbors.append({'idx': nei, 'area': stats[nei].area})
                 down_cnt = down_cnt + 1
         else:
             if x2 > x1:
-                right_neighbors.append({'label': nei, 'area': stats(nei).area})
+                right_neighbors.append({'idx': nei, 'area': stats[nei].area})
                 right_cnt = right_cnt + 1
             else:
-                left_neighbors.append({'label': nei, 'area': stats(nei).area})
+                left_neighbors.append({'idx': nei, 'area': stats[nei].area})
                 left_cnt = left_cnt + 1
 
-    up_neighbors = up_neighbors.sort(key=lambda x: x['area'])
-    down_neighbors = down_neighbors.sort(key=lambda x: x['area'])
-    right_neighbors = right_neighbors.sort(key=lambda x: x['area'])
-    left_neighbors = left_neighbors.sort(key=lambda x: x['area'])
-    
-    
-    
-    
+    # sort them by area and get the first 2
+    up_neighbors.sort(key=lambda x: x['area'], reverse=True)
+    up_neighbors = up_neighbors[:2]
+    up_neighbors = [x['idx'] for x in up_neighbors]
+
+    down_neighbors.sort(key=lambda x: x['area'], reverse=True)
+    down_neighbors = down_neighbors[:2]
+    down_neighbors = [x['idx'] for x in down_neighbors]
+
+    right_neighbors.sort(key=lambda x: x['area'], reverse=True)
+    right_neighbors = right_neighbors[:2]
+    right_neighbors = [x['idx'] for x in right_neighbors]
+
+    left_neighbors.sort(key=lambda x: x['area'], reverse=True)
+    left_neighbors = left_neighbors[:2]
+    left_neighbors = [x['idx'] for x in left_neighbors]
+    all_neighbors = [up_neighbors, down_neighbors,
+                     right_neighbors, left_neighbors]
+
+    for i in range(len(all_neighbors)):
+        # if there is no any neighbor
+        if len(all_neighbors[i]) == 0:
+            all_neighbors[i] = [superpix, superpix]
+            # if there is only 1 neighbor
+        if len(all_neighbors[i]) == 1:
+            all_neighbors[i].append(all_neighbors[i][0])
+
+    return all_neighbors[0] + all_neighbors[1] + all_neighbors[2] + all_neighbors[3]
+
+
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
 num_superpixel = 200
 img_height = 200
