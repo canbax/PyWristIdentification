@@ -221,7 +221,8 @@ img_height = 200
 compactness = 8
 
 img = plt.imread(fname)
-img = resize(img, (img_height, img.shape[1]))
+# preserve aspect ratio during resize
+img = resize(img, (img_height, img_height * img.shape[0]/img.shape[1]))
 segments = slic(img, n_segments=num_superpixel, compactness=compactness)
 
 # plt.imshow(mark_boundaries(img, segments))
