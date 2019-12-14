@@ -48,9 +48,6 @@ def get_adjacency_matrix(segments: np.array):
 
 
 def get_differenceOfGaussians(img, sigma1, sigma2):
-    filter1_size = 2 * ceil(3 * sigma1) + 1
-    filter2_size = 2 * ceil(3 * sigma2) + 1
-
     min_val = img.min()
     max_val = img.max()
     img = (img - min_val) / (max_val - min_val) * 255
@@ -122,7 +119,6 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
     minCoverPercentage = 0.5
     color_spaces = [imgRGB, imgRGBnorm, imgLAB, imgHSV, imgYCbCr, imgYIQ]
 
-    
     features = []
     for i, s in enumerate(stats):
         # get features of superpixels inside a mask
@@ -130,8 +126,8 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
             continue
         feature = []
         # put coords of superpixel as a feature
-        # feature.append(s.centroid[0])
-        # feature.append(s.centroid[1])
+        feature.append(s.centroid[0])
+        feature.append(s.centroid[1])
 
         # get features of 8 neighbors and itself
         neighbors = get8neighbors4_superpixel(stats, adj_matrix, i)
@@ -227,7 +223,6 @@ def trainEoT():
     imgs_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
     masks_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SETsegmentedWristImages\\SET1\\mask'
     imgs = listdir(imgs_path)
-    num_feature = 450
     X1 = np.array([])
     X2 = np.array([])
 
@@ -298,17 +293,15 @@ def getSuperpixelFeaturesFromRegion(fname, binaryCropMask):
 def test_adj_matrix(n):
 
     imgs_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
-    masks_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SETsegmentedWristImages\\SET1\\mask'
     imgs = listdir(imgs_path)
     curr_img = imgs[randint(0, len(imgs)-1)]
     img = read_img(imgs_path + '\\' + curr_img)
     num_superpixel, compactness = 200, 8
     segments = slic(img, n_segments=num_superpixel, compactness=compactness)
 
-    neig = np.ones(segments.shape)
     adj_matrix = get_adjacency_matrix(segments)
 
-    for i in range(n):
+    for _ in range(n):
         img2 = np.array(img)
         a_segment = randint(0, len(adj_matrix)-1)
         nei = np.nonzero(adj_matrix[a_segment, :])[0]
@@ -325,9 +318,7 @@ def test_adj_matrix(n):
         plt.imshow(mark_boundaries(img2, segments))
         plt.show()
 
-# test_adj_matrix(20)
-
-
+test_adj_matrix(5)
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
 # getSuperpixelFeaturesFromFile(fname)
-trainEoT()
+# trainEoT()
