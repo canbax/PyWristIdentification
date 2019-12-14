@@ -9,6 +9,12 @@ from skimage.transform import resize
 import numpy as np
 from math import ceil, atan
 from scipy import ndimage
+from sklearn import model_selection
+from sklearn.ensemble import BaggingClassifier
+from sklearn.tree import DecisionTreeClassifier
+from os import listdir
+import time
+from random import randint
 
 PIXEL_MAX_VAL = 255
 
@@ -22,7 +28,7 @@ def get_adjacency_matrix(segments: np.array):
 
     # horizontally iterate over pixels
     for i in range(x):
-        for j in range(i + 1, y - 1):
+        for j in range(0, y - 1):
             seg1 = segments[i][j]
             seg2 = segments[i][j + 1]
             if seg1 != seg2:
@@ -31,7 +37,7 @@ def get_adjacency_matrix(segments: np.array):
 
     # vertically iterate over pixels
     for j in range(y):
-        for i in range(j + 1, x - 1):
+        for i in range(0, x - 1):
             seg1 = segments[i][j]
             seg2 = segments[i + 1][j]
             if seg1 != seg2:
@@ -66,7 +72,7 @@ def get_7_gradient_maps(imgRGB):
     y = np.divide(y, np.mean((np.minimum(abs(y), t)) ** a) ** (1 / a))
     imgNorm = y * np.tanh(np.divide(y, t))
 
-    imgLAB = rgb2lab(img)
+    imgLAB = rgb2lab(imgRGB)
     L = imgLAB[:, :, 0]
     A = imgLAB[:, :, 1]
     B = imgLAB[:, :, 2]
@@ -116,6 +122,7 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
     minCoverArea = 0
     color_spaces = [imgRGB, imgRGBnorm, imgLAB, imgHSV, imgYCbCr, imgYIQ]
 
+    
     features = []
     for i, s in enumerate(stats):
         # get features of superpixels inside a mask
@@ -123,8 +130,8 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
             continue
         feature = []
         # put coords of superpixel as a feature
-        feature.append(s.centroid[0])
-        feature.append(s.centroid[1])
+        # feature.append(s.centroid[0])
+        # feature.append(s.centroid[1])
 
         # get features of 8 neighbors and itself
         neighbors = get8neighbors4_superpixel(stats, adj_matrix, i)
@@ -133,7 +140,8 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
             for nei in neighbors:
                 for channel in range(3):
                     coords = stats[nei].coords
-                    color_values = color_space[coords[:,0], coords[:, 1], channel]
+                    color_values = color_space[coords[:,
+                                                      0], coords[:, 1], channel]
                     feature.append(np.mean(color_values))
                     feature.append(np.var(color_values))
 
@@ -152,7 +160,7 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
 
 
 def get8neighbors4_superpixel(stats, adj_matrix, superpix):
-    neighborhood = adj_matrix[superpix, superpix + 1:]
+    neighborhood = adj_matrix[superpix, :]
     neighbor_idxs = np.nonzero(neighborhood)[0]
 
     up_neighbors = []
@@ -169,7 +177,7 @@ def get8neighbors4_superpixel(stats, adj_matrix, superpix):
     for nei in neighbor_idxs:
         x1, y1 = stats[superpix].centroid
         x2, y2 = stats[nei].centroid
-        slope = abs((y2 - y1) / (x2 - x1))
+        slope = abs((y2 - y1) / (x2 - x1 + 1e-5))
         if slope > slope_threshold:
             if y2 > y1:
                 up_neighbors.append({'idx': nei, 'area': stats[nei].area})
@@ -215,25 +223,111 @@ def get8neighbors4_superpixel(stats, adj_matrix, superpix):
     return all_neighbors[0] + all_neighbors[1] + all_neighbors[2] + all_neighbors[3]
 
 
+def trainEoT():
+    imgs_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
+    masks_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SETsegmentedWristImages\\SET1\\mask'
+    imgs = listdir(imgs_path)
+    num_feature = 450
+    X1 = np.array([])
+    X2 = np.array([])
+
+    start_time = time.time()
+    for img in imgs[:10]:
+        mask_file_name = 'mask' + img[:-6] + '_binTree' + img[-6:]
+        mask = read_img(masks_path + '\\' + mask_file_name)
+        img_path = imgs_path + '\\' + img
+        x1 = np.array(getSuperpixelFeaturesFromRegion(img_path, mask != 0))
+        x2 = np.array(getSuperpixelFeaturesFromRegion(img_path, mask == 0))
+
+        if X1.shape[0] == 0:
+            X1 = x1
+        else:
+            X1 = np.concatenate((X1, x1))
+        if X2.shape[0] == 0:
+            X2 = x2
+        else:
+            X2 = np.concatenate((X2, x2))
+
+        print(time.time() - start_time)
+
+    Y1 = np.ones((X1.shape[0], ))
+    Y2 = np.zeros((X2.shape[0], ))
+    print('y1 shape: ' + str(Y1.shape[0]))
+    print('y2 shape: ' + str(Y2.shape[0]))
+    Y = np.concatenate((Y1, Y2))
+    X = np.concatenate((X1, X2))
+
+    seed, fold_count = 7, 10
+    kfold = model_selection.KFold(n_splits=fold_count, random_state=seed)
+    cart = DecisionTreeClassifier()
+    num_trees = 10
+    model = BaggingClassifier(
+        base_estimator=cart, n_estimators=num_trees, random_state=seed)
+    results = model_selection.cross_val_score(model, X, Y, cv=kfold)
+    print('-------------------------------------')
+    print(results.mean())
+
+# read image and make height 200px
+
+
+def read_img(fname, img_height=200):
+    img = plt.imread(fname)
+    # preserve aspect ratio during resize
+    wid = ceil(img_height * img.shape[1] / img.shape[0])
+    return resize(img, (img_height, wid), preserve_range=True)
+
+
+def getSuperpixelFeaturesFromRegion(fname, binaryCropMask):
+    img_height = 200
+    img = read_img(fname, img_height)
+
+    num_superpixel = 200
+    compactness = 8
+    segments = slic(img, n_segments=num_superpixel, compactness=compactness)
+
+    # plt.imshow(mark_boundaries(img, segments))
+    # plt.show()
+
+    adj_matrix = get_adjacency_matrix(segments)
+    # region props ignore labels with 0 but slic labels are 0 indexed
+    stats = regionprops(segments + 1)
+
+    return extract_superpixel_features(stats, img, adj_matrix, binaryCropMask)
+
+
+def test_adj_matrix(n):
+
+    imgs_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
+    masks_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SETsegmentedWristImages\\SET1\\mask'
+    imgs = listdir(imgs_path)
+    curr_img = imgs[randint(0, len(imgs)-1)]
+    img = read_img(imgs_path + '\\' + curr_img)
+    num_superpixel, compactness = 200, 8
+    segments = slic(img, n_segments=num_superpixel, compactness=compactness)
+
+    neig = np.ones(segments.shape)
+    adj_matrix = get_adjacency_matrix(segments)
+
+    for i in range(n):
+        img2 = np.array(img)
+        a_segment = randint(0, len(adj_matrix)-1)
+        nei = np.nonzero(adj_matrix[a_segment, :])[0]
+        pic = np.full(segments.shape, False, dtype=bool)
+        for n in nei:
+            pic = pic | (segments == n)
+
+        # make this superpixel red
+        img2[segments == a_segment] = np.array([1, 0, 0])
+        # make neigbors blue
+        img2[pic] = np.array([0, 0, 1])
+        plt.title(str(imgs[randint(0, len(imgs)-1)]) +
+                  ' superpixel: ' + str(a_segment))
+        plt.imshow(mark_boundaries(img2, segments))
+        plt.show()
+
+# test_adj_matrix(20)
+
+
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
-num_superpixel = 200
-img_height = 200
-compactness = 8
-
-img = plt.imread(fname)
-# preserve aspect ratio during resize
-img = resize(img, (img_height, img_height * img.shape[0]/img.shape[1]))
-segments = slic(img, n_segments=num_superpixel, compactness=compactness)
-
-# plt.imshow(mark_boundaries(img, segments))
-# plt.show()
-
-adj_matrix = get_adjacency_matrix(segments)
-# region props ignore labels with 0 but slic labels are 0 indexed
-stats = regionprops(segments + 1)
-
-binaryCropMask = np.ones(img.shape)
-extract_superpixel_features(stats, img, adj_matrix, binaryCropMask)
-
-print(len(stats))
-print(adj_matrix)
+# getSuperpixelFeaturesFromFile(fname)
+trainEoT()
