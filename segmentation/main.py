@@ -290,11 +290,14 @@ def getSuperpixelFeaturesFromRegion(fname, binaryCropMask):
     return extract_superpixel_features(stats, img, adj_matrix, binaryCropMask)
 
 
-def test_adj_matrix(n):
+def test_adj_matrix(n, curr_img=None, segment_no=None):
 
-    imgs_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
+    # imgs_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
+    imgs_path = 'D:\\yusuf\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
     imgs = listdir(imgs_path)
-    curr_img = imgs[randint(0, len(imgs)-1)]
+    if curr_img == None:
+        curr_img = imgs[randint(0, len(imgs)-1)]
+    
     img = read_img(imgs_path + '\\' + curr_img)
     num_superpixel, compactness = 200, 8
     segments = slic(img, n_segments=num_superpixel, compactness=compactness)
@@ -303,7 +306,11 @@ def test_adj_matrix(n):
 
     for _ in range(n):
         img2 = np.array(img)
-        a_segment = randint(0, len(adj_matrix)-1)
+        a_segment = 0
+        if segment_no == None:
+            a_segment = randint(0, len(adj_matrix)-1)
+        else:
+            a_segment = segment_no
         nei = np.nonzero(adj_matrix[a_segment, :])[0]
         pic = np.full(segments.shape, False, dtype=bool)
         for n in nei:
@@ -313,10 +320,10 @@ def test_adj_matrix(n):
         img2[segments == a_segment] = np.array([1, 0, 0])
         # make neigbors blue
         img2[pic] = np.array([0, 0, 1])
-        plt.title(str(imgs[randint(0, len(imgs)-1)]) +
-                  ' superpixel: ' + str(a_segment))
+        plt.title(curr_img + ' superpixel: ' + str(a_segment))
         plt.imshow(mark_boundaries(img2, segments))
         plt.show()
+
 
 test_adj_matrix(5)
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
