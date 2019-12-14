@@ -15,8 +15,8 @@ from sklearn.tree import DecisionTreeClassifier
 from os import listdir
 import time
 from random import randint
-
 PIXEL_MAX_VAL = 255
+DB_PATH = 'D:\\yusuf\\cs 579\\project\\NTU-Wrist-Image-Database-v1'
 
 
 def get_adjacency_matrix(segments: np.array):
@@ -32,8 +32,8 @@ def get_adjacency_matrix(segments: np.array):
             seg1 = segments[i][j]
             seg2 = segments[i][j + 1]
             if seg1 != seg2:
-                r[seg1][seg2] = 1
-                r[seg2][seg1] = 1
+                r[seg1][seg2] = r[seg1][seg2] + 1
+                r[seg2][seg1] = r[seg2][seg1] + 1
 
     # vertically iterate over pixels
     for j in range(y):
@@ -41,10 +41,11 @@ def get_adjacency_matrix(segments: np.array):
             seg1 = segments[i][j]
             seg2 = segments[i + 1][j]
             if seg1 != seg2:
-                r[seg1][seg2] = 1
-                r[seg2][seg1] = 1
-
-    return r
+                r[seg1][seg2] = r[seg1][seg2] + 1
+                r[seg2][seg1] = r[seg2][seg1] + 1
+    
+    min_pixel_count_for_neigbor = 0
+    return r > min_pixel_count_for_neigbor
 
 
 def get_differenceOfGaussians(img, sigma1, sigma2):
@@ -220,8 +221,8 @@ def get8neighbors4_superpixel(stats, adj_matrix, superpix):
 
 
 def trainEoT():
-    imgs_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
-    masks_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SETsegmentedWristImages\\SET1\\mask'
+    imgs_path = DB_PATH + '\\SEToriginalWristImages\\SET1'
+    masks_path = DB_PATH + '\\SETsegmentedWristImages\\SET1\\mask'
     imgs = listdir(imgs_path)
     X1 = np.array([])
     X2 = np.array([])
@@ -292,12 +293,11 @@ def getSuperpixelFeaturesFromRegion(fname, binaryCropMask):
 
 def test_adj_matrix(n, curr_img=None, segment_no=None):
 
-    # imgs_path = 'C:\\Users\\yusuf\\Desktop\\bilkent ms\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
-    imgs_path = 'D:\\yusuf\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SEToriginalWristImages\\SET1'
+    imgs_path = DB_PATH + '\\SEToriginalWristImages\\SET1'
     imgs = listdir(imgs_path)
     if curr_img == None:
         curr_img = imgs[randint(0, len(imgs)-1)]
-    
+
     img = read_img(imgs_path + '\\' + curr_img)
     num_superpixel, compactness = 200, 8
     segments = slic(img, n_segments=num_superpixel, compactness=compactness)
@@ -325,7 +325,7 @@ def test_adj_matrix(n, curr_img=None, segment_no=None):
         plt.show()
 
 
-test_adj_matrix(5)
+# test_adj_matrix(5)
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
 # getSuperpixelFeaturesFromFile(fname)
-# trainEoT()
+trainEoT()
