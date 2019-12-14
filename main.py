@@ -119,14 +119,14 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
     imgRGBnorm = np.divide(imgRGB, imgRGBsum)
 
     gradient_maps = get_7_gradient_maps(imgRGB)
-    minCoverArea = 0
+    minCoverPercentage = 0.5
     color_spaces = [imgRGB, imgRGBnorm, imgLAB, imgHSV, imgYCbCr, imgYIQ]
 
     
     features = []
     for i, s in enumerate(stats):
         # get features of superpixels inside a mask
-        if s.area <= 0 or np.mean(binaryCropMask[s.coords[:, 0], s.coords[:, 1]]) <= minCoverArea:
+        if s.area <= 0 or np.mean(binaryCropMask[s.coords[:, 0], s.coords[:, 1]]) <= minCoverPercentage:
             continue
         feature = []
         # put coords of superpixel as a feature
