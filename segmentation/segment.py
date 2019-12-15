@@ -117,7 +117,7 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
     imgRGBnorm = np.divide(imgRGB, imgRGBsum)
 
     gradient_maps = get_7_gradient_maps(imgRGB)
-    minCoverPercentage = 0.5
+    minCoverPercentage = 0
     color_spaces = [imgRGB, imgRGBnorm, imgLAB, imgHSV, imgYCbCr, imgYIQ]
 
     features = []
@@ -220,7 +220,7 @@ def get8neighbors4_superpixel(stats, adj_matrix, superpix):
     return all_neighbors[0] + all_neighbors[1] + all_neighbors[2] + all_neighbors[3]
 
 
-def trainEoT():
+def trainEoT(num_training_img):
     imgs_path = DB_PATH + '\\SEToriginalWristImages\\SET1'
     masks_path = DB_PATH + '\\SETsegmentedWristImages\\SET1\\mask'
     imgs = listdir(imgs_path)
@@ -228,7 +228,7 @@ def trainEoT():
     X2 = np.array([])
 
     start_time = time.time()
-    for img in imgs[:10]:
+    for img in imgs[:num_training_img]:
         mask_file_name = 'mask' + img[:-6] + '_binTree' + img[-6:]
         mask = read_img(masks_path + '\\' + mask_file_name)
         img_path = imgs_path + '\\' + img
@@ -329,6 +329,6 @@ def test_adj_matrix(n, curr_img=None, segment_no=None):
 # test_adj_matrix(5)
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
 # getSuperpixelFeaturesFromFile(fname)
-# trainEoT()
+trainEoT(100)
 
-test_adj_matrix(4)
+# test_adj_matrix(4)
