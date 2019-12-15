@@ -44,7 +44,7 @@ def get_adjacency_matrix(segments: np.array):
                 r[seg1][seg2] = r[seg1][seg2] + 1
                 r[seg2][seg1] = r[seg2][seg1] + 1
     
-    min_pixel_count_for_neigbor = 0
+    min_pixel_count_for_neigbor = 5
     return r > min_pixel_count_for_neigbor
 
 

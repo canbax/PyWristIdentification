@@ -1,0 +1,4 @@
+- a superpixel should be either inside skin or non-skin region. If it's region is intersecting with both, it is problematic 
+So increasing number of superpixels might be better. SLIC in python might be worse then them
+
+- increasing minimum neighboring pixel number to determine adjacency of 2 superpixels makes slight improvement
