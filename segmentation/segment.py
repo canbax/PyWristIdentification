@@ -305,7 +305,7 @@ def test_adj_matrix(n, curr_img=None, segment_no=None):
     adj_matrix = get_adjacency_matrix(segments)
 
     for _ in range(n):
-        img2 = np.array(img)
+        img2 = np.array(img, dtype=int)
         a_segment = 0
         if segment_no == None:
             a_segment = randint(0, len(adj_matrix)-1)
@@ -317,10 +317,11 @@ def test_adj_matrix(n, curr_img=None, segment_no=None):
             pic = pic | (segments == n)
 
         # make this superpixel red
-        img2[segments == a_segment] = np.array([1, 0, 0])
+        img2[segments == a_segment] = np.array([255, 0, 0])
         # make neigbors blue
-        img2[pic] = np.array([0, 0, 1])
+        img2[pic] = np.array([0, 0, 255])
         plt.title(curr_img + ' superpixel: ' + str(a_segment))
+        img2 = img2 / PIXEL_MAX_VAL
         plt.imshow(mark_boundaries(img2, segments))
         plt.show()
 
@@ -328,4 +329,6 @@ def test_adj_matrix(n, curr_img=None, segment_no=None):
 # test_adj_matrix(5)
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
 # getSuperpixelFeaturesFromFile(fname)
-trainEoT()
+# trainEoT()
+
+test_adj_matrix(4)
