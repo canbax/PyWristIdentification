@@ -41,12 +41,14 @@ def get_up_down_boundaries(mask: np.array):
 
 
 def build_graph(img, mask, connectivity, diag_dist, power_param)
-    """ corresponds to 'function G = maskBuildGraph(I,mask,conn, diagParamD,powerParam)'
+
+""" corresponds to 'function G = maskBuildGraph(I,mask,conn, diagParamD,powerParam)'
     img should be weighted image """
-    if connectivity != 4 or connectivity != 8:
-        print ('connectivity must be 4 or 8, it is being set to 4')
-        connectivity = 4
-    
+if connectivity != 4 or connectivity != 8:
+    print('connectivity must be 4 or 8, it is being set to 4')
+    connectivity = 4
+
+
 def test_get_img_weight():
     img = plt.imread(
         'D:\\yusuf\\cs 579\\project\\NTU-Wrist-Image-Database-v1\\SETsegmentedWristImages\\SET1\\img\\0001_01_01_01_809_866_318_423_binTree_L.jpg')
