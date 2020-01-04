@@ -1,7 +1,11 @@
 import numpy as np
-
-
+from scipy import stats, signal
+from skimage.morphology import erosion
+from skimage.util import img_as_float
+import pyvlfeat
 # int to np array of binary integers
+
+
 def bin2dec(arr):
     v = 0
     base = 0
@@ -46,7 +50,7 @@ def get_lbp_mapping(sample_cnt, mapping_type):
                 table[i] = idx
                 idx = idx + 1
             else:
-                table[i] = numPattern -1
+                table[i] = numPattern - 1
 
     # Rotation invariant
     if mapping_type == 'ri':
@@ -64,7 +68,7 @@ def get_lbp_mapping(sample_cnt, mapping_type):
                 tmp_map[rm] = numPattern
                 numPattern = numPattern + 1
             table[i] = tmp_map[rm]
-    
+
     # Uniform & Rotation invariant
     if mapping_type == 'riu2':
         numPattern = sample_cnt + 2
@@ -78,15 +82,18 @@ def get_lbp_mapping(sample_cnt, mapping_type):
             else:
                 table[i] = sample_cnt + 1
 
-    return table, numPattern
+    return {'table': table, 'numPattern': numPattern}
 
 
 def get_grid_params(img, mask, num_ver_block, num_hor_block):
+    """ returns idx_up, idx_down, ver_step, hor_step """
     m, n = mask.shape
-    
+
     j_up = 0
     idx_up = 0
     idx_down = 0
+    idx_left = 0
+    idx_right = n
     ver_step = 0
     hor_step = 0
     temp = 0
@@ -96,7 +103,7 @@ def get_grid_params(img, mask, num_ver_block, num_hor_block):
         j_up = j_up + 1
         temp = np.mean(mask[j_up, :])
         idx_up = j_up
-    
+
     temp = 0
     j_down = m
     # find down index
@@ -104,13 +111,310 @@ def get_grid_params(img, mask, num_ver_block, num_hor_block):
         temp = np.mean(mask[j_down, :])
         j_down = j_down - 1
         idx_down = j_down
-    
-    threshold2 = 
-    
-    
+
+    threshold2 = np.mean(stats.mode(mask[idx_up:idx_down, :]))
+    i_left = 0
+    temp = 0
+    while temp < threshold2:
+        i_left = i_left + 1
+        temp = np.mean(mask[idx_up:idx_down, i_left])
+        idx_left = i_left
+
+    temp = 0
+    i_right = n
+    while temp < threshold2:
+        i_right = i_right - 1
+        temp = np.mean(mask[idx_up:idx_down, i_right])
+        idx_right = i_right
+
+    j_up = 0
+    j_down = m
+    threshold1 = np.mean(stats.mode(mask[:, idx_left:idx_right]))
+    temp = 0
+    while temp < threshold1:
+        j_up = j_up + 1
+        temp = np.mean(mask[j_up, idx_left:idx_right])
+        idx_up = j_up
+
+    temp = 0
+    while temp < threshold1:
+        temp = np.mean(mask[j_down, idx_left:idx_right])
+        j_down = j_down - 1
+        idx_down = j_down
+
+    hor_step = np.floor((idx_down - idx_up) / num_hor_block)
+    ver_step = np.floor(n / num_ver_block)
+
+    idx_up = idx_up - \
+        np.floor((idx_up + num_hor_block * hor_step - idx_down) / 2)
+    if idx_up < 1:
+        idx_up = 1
+
     return idx_up, idx_down, ver_step, hor_step
 
 
+def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
+    map1 = settings['map1']
+    map2 = settings['map2']
+    radius1 = settings['radius1']
+    radius2 = settings['radius2']
+    neighb = settings['neighb']
+
+    c1 = img[:, :, 0]
+    c2 = img[:, :, 1]
+    c3 = img[:, :, 2]
+
+    gray2 = (0.2989 * c1) + (0.5870 * c2) + (0.1140 * c3)
+    mask4lbp = erosion(mask, np.ones((5, 5)))
+
+
+def lbp(img, radius, neighb, mapping, mode):
+    spoints = np.zeros((neighb, 2))
+
+    # Angle step.
+    a = 2 * np.pi / neighb
+
+    for i in range(neighb):
+        spoints[i, 0] = -radius * np.sin(i * a)
+        spoints[i, 1] = radius * np.cos(i * a)
+
+    miny = min(spoints[:, 0])
+    maxy = max(spoints[:, 0])
+    minx = min(spoints[:, 1])
+    maxx = max(spoints[:, 1])
+
+    # Block size, each LBP code is computed within a block of size bsizey*bsizex
+    bsizey = np.ceil(max(maxy, 0)) - np.floor(min(miny, 0)) + 1
+    bsizex = np.ceil(max(maxx, 0)) - np.floor(min(minx, 0)) + 1
+
+    # Coordinates of origin (0,0) in the block
+    origy = 1 - np.floor(min(miny, 0))
+    origx = 1 - np.floor(min(minx, 0))
+
+    ysize, xsize = img.shape
+
+    # Calculate dx and dy
+    dx = xsize - bsizex
+    dy = ysize - bsizey
+
+    # Fill the center pixel matrix C.
+    C = img[origy:origy + dy, origx:origx + dx]
+    d_C = C.astype(np.double)
+
+    # Initialize the result matrix with zeros.
+    result = np.zeros((dy + 1, dx + 1))
+    d_image = img.astype(np.double)
+    for i in range(neighb):
+        y = spoints[i, 1] + origy
+        x = spoints[i, 2] + origx
+
+        # Calculate floors, ceils and rounds for the x and y.
+        fy = np.floor(y)
+        cy = np.ceil(y)
+        ry = np.round(y)
+        fx = np.floor(x)
+        cx = np.ceil(x)
+        rx = np.round(x)
+
+        # Check if interpolation is needed
+        E = 1e-6
+        if abs(x - rx) < E and abs(y - ry) < E:
+            # Interpolation is not needed, use original datatypes
+            N = img[ry:ry + dy, rx:rx + dx]
+            D = N >= C
+        else:
+            # Interpolation needed, use double type images
+            ty = y - fy
+            tx = x - fx
+
+            # Calculate the interpolation weights.
+            w1 = roundn((1 - tx) * (1 - ty), -6)
+            w2 = roundn(tx * (1 - ty), -6)
+            w3 = roundn((1 - tx) * ty, -6)
+            w4 = roundn(1 - w1 - w2 - w3, -6)
+
+            # Compute interpolated pixel values
+            N = w1 * d_image[fy:fy + dy, fx:fx + dx] + w2 * d_image[fy:fy + dy, cx:cx + dx] + \
+                w3 * d_image[cy:cy + dy, fx: fx + dx] + \
+                w4 * d_image[cy: cy + dy, cx: cx + dx]
+            N = roundn(N, -4)
+            D = N >= d_C
+        # Update the result matrix.
+        v = 2 ** (i-1)
+        result = result + v * D
+
+    # apply mapping
+    # bins = mapping['numPattern']
+    for i in range(result.shape[0]):
+        for j in range(result.shape[1]):
+            result[i, j] = mapping['table'][result[i, j]]
+
+    return result.astype(np.uint32)
+
+
+def roundn(x, n):
+    x = 0
+    if n < 0:
+        p = 10 ^ -n
+        x = round(p * x) / p
+    elif n > 0:
+        p = 10 ^ n
+        x = p * round(x / p)
+    else:
+        x = round(x)
+    return x
+
+
+def extract_lbp(F1: np.array, grid: dict, bin_num):
+    num_hor_block = grid['num_hor_block']
+    num_ver_block = grid['num_ver_block']
+    hor_step = grid['hor_step']
+    ver_step = grid['ver_step']
+    idx_up = grid['idx_up']
+    histMatrix = np.zeros(num_hor_block * num_ver_block, bin_num)
+
+    indM = 0
+    y = 1
+    x = idx_up
+    for i in range(num_hor_block):
+        x = idx_up
+        for j in range(num_ver_block):
+            indM = indM + 1
+            box = F1[x:x + hor_step, y:y + ver_step]
+            histMatrix[indM, :], _ = np.histogram(
+                box[box != 0], range(1, bin_num + 1))
+            x = x + hor_step
+        y = y + ver_step
+
+    return histMatrix
+
+
+def vein_gabor_enhancement(img, scale):
+    I = img_as_float(img)
+    No_of_Orientation = 16  # in wrist paper 16 oreientations
+    No_of_Scale = len(scale)
+    a = scale
+    Gr, Gi = Gabor(0, 1.5, 1, 200, a[No_of_Scale-1])  # 1.5
+    p = Energy_check(Gr)
+    p_1 = p+1
+
+    Gabor_Matrix_Gr = np.zeros(
+        (2*p + 1, 2*p + 1, No_of_Orientation, No_of_Scale))
+
+    ER = [0] * No_of_Scale
+
+    for s in range(No_of_Scale):
+        ang_count = 0
+        for ang in range(0, 179, 180 / No_of_Orientation):
+            ang_count = ang_count + 1
+            Gr, Gi = Gabor(ang, 1.5, 1, p, a[s])  # 1.5
+            Gabor_Matrix_Gr[:, :, ang_count, s] = Gr
+        R = Energy_check(np.squeeze(Gabor_Matrix_Gr[:, :, 1, s]))
+        ER[s] = R
+
+    Energy_Map = np.zeros(I.shape)
+    Scale_Map = np.ones(I.shape)
+    Orient_Map = np.ones(I.shape)
+
+    E = np.zeros((I.shape[0], I.shape[1], No_of_Orientation, No_of_Scale))
+
+    Gabor_fft_Matrix_Gr = np.zeros(
+        (I.shape[0], I.shape[1], No_of_Orientation, No_of_Scale))
+
+    I_fft = np.fft.fft2(I)
+    for s in range(No_of_Scale):
+        for ang in range(No_of_Orientation):
+            pad = np.floor([(I.shape[0] - (2*p+1))/2, (I.shape[1]-(2*p+1))/2])
+            Gabor_fft_Matrix_Gr[:, :, ang, s] = np.fft.fft2(
+                np.pad(np.squeeze(Gabor_Matrix_Gr[:, :, ang, s]), pad, mode='constant'), I.shape[0], I.shape[1])
+
+    I2 = np.square(I)
+    Image_Power = np.zeros((I.shape[0], I.shape[1], No_of_Scale))
+    for s in range(No_of_Scale):
+        Image_Power[:, :, s] = np.sqrt(
+            signal.convolve2d(np.ones(ER[s]), I2, 'same')) + 0.1
+        for ang in range(No_of_Orientation):
+            E[:, :, ang, s] = np.fft.fftshift(np.fft.ifft2(-np.squeeze(
+                Gabor_fft_Matrix_Gr[:, :, ang, s]) * I_fft)) / np.squeeze(Image_Power[:, :, s])
+
+    EngAng = np.zeros(I.shape[0], I.shape[1], No_of_Scale)
+    AngIdx = np.zeros(I.shape[0], I.shape[1], No_of_Scale)
+    for s in range(No_of_Scale):
+        EngAng[:, :, s] = np.amax(E[:, :, :, s], axis=2)
+        AngIdx[:, :, s] = np.argmax(E[:, :, :, s], axis=2)
+    Energy_Map = np.amax(EngAng, axis=2)
+    Scale_Map = np.argmax(EngAng, axis=2)
+    for x in range(Energy_Map.shape[0]):
+        for y in range(Energy_Map.shape[1]):
+            Orient_Map[x, y] = AngIdx[x, y, Scale_Map[x, y]]
+
+    return Orient_Map
+
+
+def Energy_check(G):
+
+    Total_energy = np.sum(G*G) ** 0.5
+    m = G.shape[0]
+    S = (m-1) / 2
+    cx = (m-1) / 2
+    cy = (m-1) / 2
+    R = S
+    for x in range(S):
+        Energy = np.sum(np.square(G[cx - x:cx + x, cy - x:cy + x])) ** 0.5
+        Energy = Energy / Total_energy * 100
+        if Energy > 99.9:
+            R = x
+            break
+    return R
+
+
+def Gabor(ang, d, w, N, a):
+    """ Gabor(ang, 1.5, 1, p, a(s)) 
+    ang: rotation angle, d: bandwidth, w: wavelength,N: Filter size, a: scale """
+
+    k = (2 * np.log(2))**0.5 * ((2**d + 1) / (2**d - 1))
+    Gr = np.zeros((2*N + 1, 2*N + 1))
+    Gi = np.zeros((2*N + 1, 2*N + 1))
+    ang_d = ang * np.pi / 180
+    COS = np.cos(ang_d)
+    SIN = np.sin(ang_d)
+    const = w / ((2 * np.pi) ** 0.5 * k)
+
+    for x in range(-N, N + 1):
+        for y in range(-N, N + 1):
+            x_1 = x * COS + y * SIN
+            y_1 = -x * SIN + y * COS
+            x_1 = x_1 / a
+            y_1 = y_1 / a
+            temp = 1 / const * np.exp(-w * w / (8*k*k) * (4 * x_1**2 + y_1**2))
+            Gr[x+N+1, y+N+1] = a ** -1 * temp * \
+                (np.cos(w*x_1) - np.exp(-k * k/2))
+            Gi[x+N+1, y+N+1] = a ** -1 * temp * np.sin(w * x_1)
+
+    return Gr, Gi
+
+
+def extract_gabor(orient_map:np.array, grid:dict):
+    num_ver_block = grid['num_ver_block']
+    num_hor_block = grid['num_hor_block']
+    hor_step = grid['hor_step']
+    ver_step = grid['ver_step']
+    ind_up = grid['idx_up']
+    histMatrix = np.zeros((num_ver_block * num_hor_block, 16))
+    
+    indM = 0
+
+    y = 1
+    for _ in range(num_hor_block):
+        x = ind_up
+        for _ in range(num_ver_block):
+            indM = indM + 1
+            box = orient_map[x:x + hor_step, y:y + ver_step]
+            histMatrix[indM, :] = np.histogram(box(box != 0), range(1, 17))
+            x = x + hor_step      
+        y = y + ver_step
+
+    return histMatrix
+
 def test_lbp_mapping():
     print(get_lbp_mapping(8, 'riu2'))
-
