@@ -2,8 +2,12 @@ import numpy as np
 from scipy import stats, signal
 from skimage.morphology import erosion
 from skimage.util import img_as_float
-import pyvlfeat
+import cv2
+from os import listdir
+import matplotlib.pyplot as plt
+
 # int to np array of binary integers
+DB_PATH = 'D:\\yusuf\\cs 579\\project\\NTU-Wrist-Image-Database-v1'
 
 
 def bin2dec(arr):
@@ -153,22 +157,79 @@ def get_grid_params(img, mask, num_ver_block, num_hor_block):
     return idx_up, idx_down, ver_step, hor_step
 
 
+def maskimage(im, mask, col=0):
+    _, _, chan = im.shape
+    col = np.ones((chan, 1))
+
+    maskedim = im
+    for n in range(chan):
+        tmp = maskedim[:, :, n]
+        tmp[mask] = col[n]
+        maskedim[:, :, n] = tmp
+
+    return maskedim
+
+
 def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
-    map1 = settings['map1']
-    map2 = settings['map2']
-    radius1 = settings['radius1']
-    radius2 = settings['radius2']
+    mappings = [settings['map1'], settings['map2']]
+    radiuses = [settings['radius1'], settings['radius2']]
     neighb = settings['neighb']
 
-    c1 = img[:, :, 0]
-    c2 = img[:, :, 1]
-    c3 = img[:, :, 2]
-
-    gray2 = (0.2989 * c1) + (0.5870 * c2) + (0.1140 * c3)
     mask4lbp = erosion(mask, np.ones((5, 5)))
+    features = []
+    for c in range(img.shape[2]):
+        for i in range(2):
+            r = radiuses[i]
+            m = mappings[i]
+            F_C_ = lbp(img[:, :, c], r, neighb, m)
+            F_C_ = F_C_[r + 1:-r, r + 1:-r]
+            F_C_ = F_C_ + 1
+            F_C_ = maskimage(F_C_, np.logical_not(mask4lbp))
+
+            bin_nums = [10, 10, 59, 59, 59, 59, 59]
+            for j in range(len(settings['grids'])):
+                f = extract_lbp(F_C_, settings['grids'][j], bin_nums[j])
+                features.append(f.reshape((1, f.size)))
+
+    gray2 = (0.2989 * img[:, :, 0]) + (0.5870 *
+                                       img[:, :, 1]) + (0.1140 * img[:, :, 2])
+
+    s = [.2, .5, .7, .9]
+    rp = 1
+    ImgGabor = np.pad(gray2, rp, mode='constant')
+    maskGabor = np.pad(mask, rp, mode='constant')
+    Orient_Map = vein_gabor_enhancement(ImgGabor, s)
+
+    Orient_Map = Orient_Map[rp+1: -rp, rp+1: -rp]
+    maskGabor = erosion(maskGabor, get_disk8_filter())
+    maskGabor = maskGabor[rp + 1:-rp, rp + 1: -rp]
+    Orient_Map = Orient_Map + 1
+    Orient_Map = maskimage(Orient_Map, np.logical_not(maskGabor))
+
+    for j in range(len(settings['grids'])):
+        f = extract_gabor(Orient_Map, settings['grids'][j])
+        features.append(f.reshape((1, f.size)))
+
+    return np.array(features)
 
 
-def lbp(img, radius, neighb, mapping, mode):
+def get_disk8_filter():
+    arr_size = 15
+    r = np.ones((arr_size, arr_size))
+    for i in range(4):
+        for j in range(4):
+            if i + j < 4:
+                r[i, j] = 0
+                f = arr_size - 1
+                r[f - i, j] = 0
+                r[i, f - j] = 0
+                r[f - i, f - j] = 0
+
+    return r
+
+
+def lbp(img, radius, neighb, mapping):
+    img = np.pad(img, radius * 2, mode='constant')
     spoints = np.zeros((neighb, 2))
 
     # Angle step.
@@ -276,9 +337,9 @@ def extract_lbp(F1: np.array, grid: dict, bin_num):
     indM = 0
     y = 1
     x = idx_up
-    for i in range(num_hor_block):
+    for _ in range(num_hor_block):
         x = idx_up
-        for j in range(num_ver_block):
+        for _ in range(num_ver_block):
             indM = indM + 1
             box = F1[x:x + hor_step, y:y + ver_step]
             histMatrix[indM, :], _ = np.histogram(
@@ -369,7 +430,7 @@ def Energy_check(G):
 
 
 def Gabor(ang, d, w, N, a):
-    """ Gabor(ang, 1.5, 1, p, a(s)) 
+    """ Gabor(ang, 1.5, 1, p, a(s))
     ang: rotation angle, d: bandwidth, w: wavelength,N: Filter size, a: scale """
 
     k = (2 * np.log(2))**0.5 * ((2**d + 1) / (2**d - 1))
@@ -394,14 +455,14 @@ def Gabor(ang, d, w, N, a):
     return Gr, Gi
 
 
-def extract_gabor(orient_map:np.array, grid:dict):
+def extract_gabor(orient_map: np.array, grid: dict):
     num_ver_block = grid['num_ver_block']
     num_hor_block = grid['num_hor_block']
     hor_step = grid['hor_step']
     ver_step = grid['ver_step']
     ind_up = grid['idx_up']
     histMatrix = np.zeros((num_ver_block * num_hor_block, 16))
-    
+
     indM = 0
 
     y = 1
@@ -411,10 +472,29 @@ def extract_gabor(orient_map:np.array, grid:dict):
             indM = indM + 1
             box = orient_map[x:x + hor_step, y:y + ver_step]
             histMatrix[indM, :] = np.histogram(box(box != 0), range(1, 17))
-            x = x + hor_step      
+            x = x + hor_step
         y = y + ver_step
 
     return histMatrix
+
+
+def build_feature_vectors():
+    imgs_path = DB_PATH + '\\SETsegmentedAlignedWristImages\\SET1\\img'
+    masks_path = DB_PATH + '\\SETsegmentedAlignedWristImages\\SET1\\mask'
+    imgs = listdir(imgs_path)
+
+    num_training_img = 10
+    for img in imgs[:num_training_img]:
+        mask_file_name = 'mask' + img[:-6] + '_binTree' + img[-6:]
+        mask = plt.imread(masks_path + '\\' + mask_file_name)
+        I = plt.imread(imgs_path + '\\' + img)
+        
+
+def get_sift_features(gray: np.array):
+    # sift = cv2.xfeatures2d.SIFT_create()
+    # _, des = sift.detectAndCompute(gray, None)
+    a = 1
+
 
 def test_lbp_mapping():
     print(get_lbp_mapping(8, 'riu2'))
