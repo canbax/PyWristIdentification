@@ -6,6 +6,7 @@ import cv2
 from os import listdir
 import matplotlib.pyplot as plt
 from skimage.color import rgb2gray
+import math
 
 # int to np array of binary integers
 DB_PATH = 'D:\\yusuf\\cs 579\\project\\NTU-Wrist-Image-Database-v1'
@@ -163,7 +164,7 @@ def maskimage(im, mask, col=0):
     chan = 1
     if len(im.shape) > 2:
         chan = im.shape[2]
-    
+
     col = np.ones((chan, 1))
 
     maskedim = im
@@ -183,22 +184,27 @@ def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
     mappings = [settings['map1'], settings['map2']]
     radiuses = [settings['radius1'], settings['radius2']]
     neighb = settings['neighb']
-
+    
     mask4lbp = erosion(mask, np.ones((5, 5)))
-    features = []
+    # at the end there will be 49 features for each
+    features = np.array([])
+    tot = 0
     for c in range(img.shape[2]):
-        for i in range(2):
-            r = radiuses[i]
-            m = mappings[i]
+        bin_nums = [10, 10, 59, 59, 59, 59, 59]
+        for j in range(len(settings['grids'])):
+            r = radiuses[0]
+            m = mappings[0]
+            if j > 1:
+                r = radiuses[1]
+                m = mappings[1]
             F_C_ = lbp(img[:, :, c], r, neighb, m)
-            F_C_ = F_C_[r + 1:-r, r + 1:-r]
+            F_C_ = F_C_[r:-r, r:-r]
             F_C_ = F_C_ + 1
             F_C_ = maskimage(F_C_, np.logical_not(mask4lbp))
-
-            bin_nums = [10, 10, 59, 59, 59, 59, 59]
-            for j in range(len(settings['grids'])):
-                f = extract_lbp(F_C_, settings['grids'][j], bin_nums[j])
-                features.append(f.reshape((1, f.size)))
+            f = extract_lbp(F_C_, settings['grids'][j], bin_nums[j])
+            # features.append(f.reshape((1, f.size)))
+            tot = tot + f.size
+            features = np.concatenate((features, f), axis=None)
 
     gray2 = (0.2989 * img[:, :, 0]) + (0.5870 *
                                        img[:, :, 1]) + (0.1140 * img[:, :, 2])
@@ -217,9 +223,12 @@ def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
 
     for j in range(len(settings['grids'])):
         f = extract_gabor(Orient_Map, settings['grids'][j])
-        features.append(f.reshape((1, f.size)))
-
-    return np.array(features)
+        # features.append(f.reshape((1, f.size)))
+        tot = tot + f.size
+        features = np.concatenate((features, f), axis=None)
+        
+    print (tot)
+    return features
 
 
 def get_disk8_filter():
@@ -258,8 +267,8 @@ def lbp(img, radius, neighb, mapping):
     bsizex = np.ceil(max(maxx, 0)) - np.floor(min(minx, 0)) + 1
 
     # Coordinates of origin (0,0) in the block
-    origy = int(1 - np.floor(min(miny, 0)))
-    origx = int(1 - np.floor(min(minx, 0)))
+    origy = int(1 - np.floor(min(miny, 0))) - 1
+    origx = int(1 - np.floor(min(minx, 0))) - 1
 
     ysize, xsize = img.shape
 
@@ -268,11 +277,11 @@ def lbp(img, radius, neighb, mapping):
     dy = int(ysize - bsizey)
 
     # Fill the center pixel matrix C.
-    C = img[origy:origy + dy, origx:origx + dx]
+    C = img[origy:origy + dy + 1, origx:origx + dx + 1]
     d_C = C.astype(np.double) / PIXEL_MAX_VAL
 
     # Initialize the result matrix with zeros.
-    result = np.zeros((dy, dx))
+    result = np.zeros((dy + 1, dx + 1))
     d_image = img.astype(np.double) / 255
     for i in range(neighb):
         y = spoints[i, 0] + origy
@@ -290,7 +299,7 @@ def lbp(img, radius, neighb, mapping):
         E = 1e-6
         if abs(x - rx) < E and abs(y - ry) < E:
             # Interpolation is not needed, use original datatypes
-            N = img[ry:ry + dy, rx:rx + dx]
+            N = img[ry:ry + dy + 1, rx:rx + dx + 1]
             D = N >= C
         else:
             # Interpolation needed, use double type images
@@ -304,9 +313,9 @@ def lbp(img, radius, neighb, mapping):
             w4 = roundn(1 - w1 - w2 - w3, -6)
 
             # Compute interpolated pixel values
-            N = w1 * d_image[fy:fy + dy, fx:fx + dx] + w2 * d_image[fy:fy + dy, cx:cx + dx] + \
-                w3 * d_image[cy:cy + dy, fx: fx + dx] + \
-                w4 * d_image[cy: cy + dy, cx: cx + dx]
+            N = w1 * d_image[fy:fy + dy + 1, fx:fx + dx + 1] + w2 * d_image[fy:fy + dy + 1, cx:cx + dx + 1] + \
+                w3 * d_image[cy:cy + dy + 1, fx:fx + dx + 1] + \
+                w4 * d_image[cy:cy + dy + 1, cx:cx + dx + 1]
             N = roundn(N, -4)
             D = N >= d_C
         # Update the result matrix.
@@ -342,7 +351,7 @@ def extract_lbp(F1: np.array, grid: dict, bin_num):
     hor_step = grid['hor_step']
     ver_step = grid['ver_step']
     idx_up = grid['idx_up']
-    histMatrix = np.zeros(num_hor_block * num_ver_block, bin_num)
+    histMatrix = np.zeros((num_hor_block * num_ver_block, bin_num))
 
     indM = 0
     y = 1
@@ -350,11 +359,11 @@ def extract_lbp(F1: np.array, grid: dict, bin_num):
     for _ in range(num_hor_block):
         x = idx_up
         for _ in range(num_ver_block):
-            indM = indM + 1
             box = F1[x:x + hor_step, y:y + ver_step]
             histMatrix[indM, :], _ = np.histogram(
-                box[box != 0], range(1, bin_num + 1))
+                box[box != 0], range(bin_num + 1))
             x = x + hor_step
+            indM = indM + 1
         y = y + ver_step
 
     return histMatrix
@@ -376,10 +385,12 @@ def vein_gabor_enhancement(img, scale):
 
     for s in range(No_of_Scale):
         ang_count = 0
-        for ang in range(0, 179, 180 / No_of_Orientation):
-            ang_count = ang_count + 1
+        for ang in range(0, 179, int(np.ceil(180 / No_of_Orientation))):
             Gr, Gi = Gabor(ang, 1.5, 1, p, a[s])  # 1.5
             Gabor_Matrix_Gr[:, :, ang_count, s] = Gr
+            ang_count = ang_count + 1
+            if ang_count == No_of_Orientation:
+                break
         R = Energy_check(np.squeeze(Gabor_Matrix_Gr[:, :, 1, s]))
         ER[s] = R
 
@@ -395,21 +406,23 @@ def vein_gabor_enhancement(img, scale):
     I_fft = np.fft.fft2(I)
     for s in range(No_of_Scale):
         for ang in range(No_of_Orientation):
-            pad = np.floor([(I.shape[0] - (2*p+1))/2, (I.shape[1]-(2*p+1))/2])
+            pad1 = math.floor((I.shape[0] - (2*p+1)) / 2)
+            pad2 = math.floor((I.shape[1] - (2*p+1)) / 2)
+            pad = [(pad1, pad2), (pad1, pad2)]
             Gabor_fft_Matrix_Gr[:, :, ang, s] = np.fft.fft2(
-                np.pad(np.squeeze(Gabor_Matrix_Gr[:, :, ang, s]), pad, mode='constant'), I.shape[0], I.shape[1])
+                np.pad(Gabor_Matrix_Gr[:, :, ang, s], pad, mode='constant'), I.shape)
 
     I2 = np.square(I)
     Image_Power = np.zeros((I.shape[0], I.shape[1], No_of_Scale))
     for s in range(No_of_Scale):
         Image_Power[:, :, s] = np.sqrt(
-            signal.convolve2d(np.ones(ER[s]), I2, 'same')) + 0.1
+            signal.convolve2d(I2, np.ones((ER[s], ER[s])), 'same')) + 0.1
         for ang in range(No_of_Orientation):
-            E[:, :, ang, s] = np.fft.fftshift(np.fft.ifft2(-np.squeeze(
-                Gabor_fft_Matrix_Gr[:, :, ang, s]) * I_fft)) / np.squeeze(Image_Power[:, :, s])
+            E[:, :, ang, s] = np.fft.fftshift(
+                np.fft.ifft2(-Gabor_fft_Matrix_Gr[:, :, ang, s] * I_fft)) / Image_Power[:, :, s]
 
-    EngAng = np.zeros(I.shape[0], I.shape[1], No_of_Scale)
-    AngIdx = np.zeros(I.shape[0], I.shape[1], No_of_Scale)
+    EngAng = np.zeros((I.shape[0], I.shape[1], No_of_Scale))
+    AngIdx = np.zeros((I.shape[0], I.shape[1], No_of_Scale))
     for s in range(No_of_Scale):
         EngAng[:, :, s] = np.amax(E[:, :, :, s], axis=2)
         AngIdx[:, :, s] = np.argmax(E[:, :, :, s], axis=2)
@@ -426,11 +439,11 @@ def Energy_check(G):
 
     Total_energy = np.sum(G*G) ** 0.5
     m = G.shape[0]
-    S = (m-1) / 2
-    cx = (m-1) / 2
-    cy = (m-1) / 2
+    S = int((m-1) / 2)
+    cx = int((m-1) / 2)
+    cy = int((m-1) / 2)
     R = S
-    for x in range(S):
+    for x in range(int(S)):
         Energy = np.sum(np.square(G[cx - x:cx + x, cy - x:cy + x])) ** 0.5
         Energy = Energy / Total_energy * 100
         if Energy > 99.9:
@@ -451,8 +464,8 @@ def Gabor(ang, d, w, N, a):
     SIN = np.sin(ang_d)
     const = w / ((2 * np.pi) ** 0.5 * k)
 
-    for x in range(-N, N + 1):
-        for y in range(-N, N + 1):
+    for x in range(-N, N):
+        for y in range(-N, N):
             x_1 = x * COS + y * SIN
             y_1 = -x * SIN + y * COS
             x_1 = x_1 / a
@@ -479,10 +492,11 @@ def extract_gabor(orient_map: np.array, grid: dict):
     for _ in range(num_hor_block):
         x = ind_up
         for _ in range(num_ver_block):
-            indM = indM + 1
             box = orient_map[x:x + hor_step, y:y + ver_step]
-            histMatrix[indM, :] = np.histogram(box(box != 0), range(1, 17))
+            histMatrix[indM, :], _ = np.histogram(box[box != 0], range(17))
             x = x + hor_step
+            indM = indM + 1
+
         y = y + ver_step
 
     return histMatrix
@@ -502,7 +516,7 @@ def build_feature_vectors():
     map2 = get_lbp_mapping(neighb, 'u2')
 
     settings = {'neighb': neighb, 'map1': map1,
-        'map2': map2, 'radius1': 1, 'radius2': 2}
+                'map2': map2, 'radius1': 1, 'radius2': 2}
 
     for img in imgs[:num_training_img]:
         mask = plt.imread(masks_path + '\\' + img)
@@ -518,21 +532,21 @@ def build_feature_vectors():
             idx_up, idx_down, ver_step, hor_step = get_grid_params(
                 I, mask, num_ver_blocks[i], num_hor_blocks[i])
             grids.append({'num_ver_block': num_ver_blocks[i], 'num_hor_block': num_hor_blocks[i],
-                         'hor_step': hor_step, 'ver_step': ver_step, 'idx_up': idx_up})
+                          'hor_step': hor_step, 'ver_step': ver_step, 'idx_up': idx_up})
 
         I = np.pad(I, [(0, 0), (2, 2), (0, 0)], mode='constant')
         mask[:idx_up, :] = 0
         mask[idx_down:, ] = 0
-        mask = np.pad(mask,  [(0, 0), (2,2)], mode='constant')
+        mask = np.pad(mask,  [(0, 0), (2, 2)], mode='constant')
 
         settings['grids'] = grids
         features = extract2(I, mask, settings, gray)
-
+        
 
 def get_sift_features(gray: np.array):
     # sift = cv2.xfeatures2d.SIFT_create()
     # _, des = sift.detectAndCompute(gray, None)
-    a=1
+    a = 1
 
 
 def test_lbp_mapping():
