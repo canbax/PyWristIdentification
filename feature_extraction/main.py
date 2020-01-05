@@ -543,13 +543,13 @@ def build_feature_vectors():
         features = extract2(I, mask, settings, gray)
 
         ch = img[-5]
-        wrist_id = float(img[:4])
-        class_label = -1
+        person_id = float(img[:4])
+        wrist_id = -1
         if ch == 'L' or ch == '1':
-            class_label = 0
+            wrist_id = 0
         if ch == 'R' or ch == '2':
-            class_label = 1
-        features = np.append(features, [wrist_id, class_label])
+            wrist_id = 1
+        features = np.append(features, [person_id, wrist_id])
         all_features.append(features)
     
     all_features = np.array(all_features)        
