@@ -7,6 +7,7 @@ from os import listdir
 import matplotlib.pyplot as plt
 from skimage.color import rgb2gray
 import math
+import time
 
 # int to np array of binary integers
 DB_PATH = 'D:\\yusuf\\cs 579\\project\\NTU-Wrist-Image-Database-v1'
@@ -188,7 +189,6 @@ def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
     mask4lbp = erosion(mask, np.ones((5, 5)))
     # at the end there will be 49 features for each
     features = np.array([])
-    tot = 0
     for c in range(img.shape[2]):
         bin_nums = [10, 10, 59, 59, 59, 59, 59]
         for j in range(len(settings['grids'])):
@@ -203,7 +203,6 @@ def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
             F_C_ = maskimage(F_C_, np.logical_not(mask4lbp))
             f = extract_lbp(F_C_, settings['grids'][j], bin_nums[j])
             # features.append(f.reshape((1, f.size)))
-            tot = tot + f.size
             features = np.concatenate((features, f), axis=None)
 
     gray2 = (0.2989 * img[:, :, 0]) + (0.5870 *
@@ -220,14 +219,12 @@ def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
     maskGabor = maskGabor[rp + 1:-rp, rp + 1: -rp]
     Orient_Map = Orient_Map + 1
     Orient_Map = maskimage(Orient_Map, np.logical_not(maskGabor))
-
+    
     for j in range(len(settings['grids'])):
         f = extract_gabor(Orient_Map, settings['grids'][j])
         # features.append(f.reshape((1, f.size)))
-        tot = tot + f.size
         features = np.concatenate((features, f), axis=None)
         
-    print (tot)
     return features
 
 
@@ -510,7 +507,9 @@ def build_feature_vectors():
     num_grids = 7
     num_ver_blocks = [7, 5, 5, 4, 3, 3, 2]
     num_hor_blocks = [5, 7, 5, 3, 4, 3, 2]
-    num_training_img = 10
+    num_training_img = 1
+    num_training_img = len(imgs)
+    print('num_training_img ', num_training_img)
     neighb = 8
     map1 = get_lbp_mapping(neighb, 'riu2')
     map2 = get_lbp_mapping(neighb, 'u2')
@@ -518,6 +517,7 @@ def build_feature_vectors():
     settings = {'neighb': neighb, 'map1': map1,
                 'map2': map2, 'radius1': 1, 'radius2': 2}
 
+    all_features = []
     for img in imgs[:num_training_img]:
         mask = plt.imread(masks_path + '\\' + img)
         I = plt.imread(imgs_path + '\\' + img)
@@ -541,7 +541,19 @@ def build_feature_vectors():
 
         settings['grids'] = grids
         features = extract2(I, mask, settings, gray)
-        
+
+        ch = img[-5]
+        wrist_id = float(img[:4])
+        class_label = -1
+        if ch == 'L' or ch == '1':
+            class_label = 0
+        if ch == 'R' or ch == '2':
+            class_label = 1
+        features = np.append(features, [wrist_id, class_label])
+        all_features.append(features)
+    
+    all_features = np.array(all_features)        
+    np.save('features', np.array(all_features))        
 
 def get_sift_features(gray: np.array):
     # sift = cv2.xfeatures2d.SIFT_create()
@@ -552,5 +564,6 @@ def get_sift_features(gray: np.array):
 def test_lbp_mapping():
     print(get_lbp_mapping(8, 'riu2'))
 
-
+t = time.time()
 build_feature_vectors()
+print(time.time() - t)
