@@ -5,9 +5,11 @@ from skimage.util import img_as_float
 import cv2
 from os import listdir
 import matplotlib.pyplot as plt
+from skimage.color import rgb2gray
 
 # int to np array of binary integers
 DB_PATH = 'D:\\yusuf\\cs 579\\project\\NTU-Wrist-Image-Database-v1'
+PIXEL_MAX_VAL = 255
 
 
 def bin2dec(arr):
@@ -109,14 +111,14 @@ def get_grid_params(img, mask, num_ver_block, num_hor_block):
         idx_up = j_up
 
     temp = 0
-    j_down = m
+    j_down = m - 1
     # find down index
     while temp < threshold1:
         temp = np.mean(mask[j_down, :])
         j_down = j_down - 1
         idx_down = j_down
 
-    threshold2 = np.mean(stats.mode(mask[idx_up:idx_down, :]))
+    threshold2 = np.mean(stats.mode(mask[idx_up:idx_down, :])[0])
     i_left = 0
     temp = 0
     while temp < threshold2:
@@ -125,15 +127,15 @@ def get_grid_params(img, mask, num_ver_block, num_hor_block):
         idx_left = i_left
 
     temp = 0
-    i_right = n
+    i_right = n - 1
     while temp < threshold2:
         i_right = i_right - 1
         temp = np.mean(mask[idx_up:idx_down, i_right])
         idx_right = i_right
 
     j_up = 0
-    j_down = m
-    threshold1 = np.mean(stats.mode(mask[:, idx_left:idx_right]))
+    j_down = m - 1
+    threshold1 = np.mean(stats.mode(mask[:, idx_left:idx_right])[0])
     temp = 0
     while temp < threshold1:
         j_up = j_up + 1
@@ -154,19 +156,26 @@ def get_grid_params(img, mask, num_ver_block, num_hor_block):
     if idx_up < 1:
         idx_up = 1
 
-    return idx_up, idx_down, ver_step, hor_step
+    return int(idx_up), int(idx_down), int(ver_step), int(hor_step)
 
 
 def maskimage(im, mask, col=0):
-    _, _, chan = im.shape
+    chan = 1
+    if len(im.shape) > 2:
+        chan = im.shape[2]
+    
     col = np.ones((chan, 1))
 
     maskedim = im
-    for n in range(chan):
-        tmp = maskedim[:, :, n]
-        tmp[mask] = col[n]
-        maskedim[:, :, n] = tmp
-
+    if chan > 1:
+        for n in range(chan):
+            tmp = maskedim[:, :, n]
+            tmp[mask] = col[n]
+            maskedim[:, :, n] = tmp
+    else:
+        tmp = maskedim
+        tmp[mask] = 1
+        maskedim = tmp
     return maskedim
 
 
@@ -249,33 +258,33 @@ def lbp(img, radius, neighb, mapping):
     bsizex = np.ceil(max(maxx, 0)) - np.floor(min(minx, 0)) + 1
 
     # Coordinates of origin (0,0) in the block
-    origy = 1 - np.floor(min(miny, 0))
-    origx = 1 - np.floor(min(minx, 0))
+    origy = int(1 - np.floor(min(miny, 0)))
+    origx = int(1 - np.floor(min(minx, 0)))
 
     ysize, xsize = img.shape
 
     # Calculate dx and dy
-    dx = xsize - bsizex
-    dy = ysize - bsizey
+    dx = int(xsize - bsizex)
+    dy = int(ysize - bsizey)
 
     # Fill the center pixel matrix C.
     C = img[origy:origy + dy, origx:origx + dx]
-    d_C = C.astype(np.double)
+    d_C = C.astype(np.double) / PIXEL_MAX_VAL
 
     # Initialize the result matrix with zeros.
-    result = np.zeros((dy + 1, dx + 1))
-    d_image = img.astype(np.double)
+    result = np.zeros((dy, dx))
+    d_image = img.astype(np.double) / 255
     for i in range(neighb):
-        y = spoints[i, 1] + origy
-        x = spoints[i, 2] + origx
+        y = spoints[i, 0] + origy
+        x = spoints[i, 1] + origx
 
         # Calculate floors, ceils and rounds for the x and y.
-        fy = np.floor(y)
-        cy = np.ceil(y)
-        ry = np.round(y)
-        fx = np.floor(x)
-        cx = np.ceil(x)
-        rx = np.round(x)
+        fy = int(np.floor(y))
+        cy = int(np.ceil(y))
+        ry = int(np.round(y))
+        fx = int(np.floor(x))
+        cx = int(np.ceil(x))
+        rx = int(np.round(x))
 
         # Check if interpolation is needed
         E = 1e-6
@@ -301,9 +310,10 @@ def lbp(img, radius, neighb, mapping):
             N = roundn(N, -4)
             D = N >= d_C
         # Update the result matrix.
-        v = 2 ** (i-1)
+        v = 2 ** i
         result = result + v * D
 
+    result = result.astype(np.uint32)
     # apply mapping
     # bins = mapping['numPattern']
     for i in range(result.shape[0]):
@@ -323,7 +333,7 @@ def roundn(x, n):
         x = p * round(x / p)
     else:
         x = round(x)
-    return x
+    return int(x)
 
 
 def extract_lbp(F1: np.array, grid: dict, bin_num):
@@ -483,18 +493,50 @@ def build_feature_vectors():
     masks_path = DB_PATH + '\\SETsegmentedAlignedWristImages\\SET1\\mask'
     imgs = listdir(imgs_path)
 
+    num_grids = 7
+    num_ver_blocks = [7, 5, 5, 4, 3, 3, 2]
+    num_hor_blocks = [5, 7, 5, 3, 4, 3, 2]
     num_training_img = 10
+    neighb = 8
+    map1 = get_lbp_mapping(neighb, 'riu2')
+    map2 = get_lbp_mapping(neighb, 'u2')
+
+    settings = {'neighb': neighb, 'map1': map1,
+        'map2': map2, 'radius1': 1, 'radius2': 2}
+
     for img in imgs[:num_training_img]:
-        mask_file_name = 'mask' + img[:-6] + '_binTree' + img[-6:]
-        mask = plt.imread(masks_path + '\\' + mask_file_name)
+        mask = plt.imread(masks_path + '\\' + img)
         I = plt.imread(imgs_path + '\\' + img)
-        
+        I = I.astype(np.double) / PIXEL_MAX_VAL
+        mask = mask > 0.5
+        # WHY hard coded values like 35, 160?
+        gray = rgb2gray(I[35:160, :, :])
+
+        grids = []
+        # determine the gird params
+        for i in range(num_grids):
+            idx_up, idx_down, ver_step, hor_step = get_grid_params(
+                I, mask, num_ver_blocks[i], num_hor_blocks[i])
+            grids.append({'num_ver_block': num_ver_blocks[i], 'num_hor_block': num_hor_blocks[i],
+                         'hor_step': hor_step, 'ver_step': ver_step, 'idx_up': idx_up})
+
+        I = np.pad(I, [(0, 0), (2, 2), (0, 0)], mode='constant')
+        mask[:idx_up, :] = 0
+        mask[idx_down:, ] = 0
+        mask = np.pad(mask,  [(0, 0), (2,2)], mode='constant')
+
+        settings['grids'] = grids
+        features = extract2(I, mask, settings, gray)
+
 
 def get_sift_features(gray: np.array):
     # sift = cv2.xfeatures2d.SIFT_create()
     # _, des = sift.detectAndCompute(gray, None)
-    a = 1
+    a=1
 
 
 def test_lbp_mapping():
     print(get_lbp_mapping(8, 'riu2'))
+
+
+build_feature_vectors()
