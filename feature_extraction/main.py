@@ -507,8 +507,8 @@ def build_feature_vectors(set_name):
     num_grids = 7
     num_ver_blocks = [7, 5, 5, 4, 3, 3, 2]
     num_hor_blocks = [5, 7, 5, 3, 4, 3, 2]
-    num_training_img = 1
-    num_training_img = len(imgs)
+    num_training_img = 10
+    # num_training_img = len(imgs)
     print('num_training_img ', num_training_img)
     neighb = 8
     map1 = get_lbp_mapping(neighb, 'riu2')

@@ -8,19 +8,18 @@ from os import listdir
 
 
 def build_classifiers(set_name: str, clf_type: str):
-    file_path = 'D:\\yusuf\\cs 579\\term project\\py-wrist-indentifier\\features_' + \
-        set_name + '.npy'
+    file_path = 'features' + set_name + '.npy'
     data = np.load(file_path)
     people = np.unique(data[:, -1])
 
-    for p in people[0:1]:
+    for p in people:
         idx_pos = data[:, -1] == p
         idx_neg = np.logical_not(idx_pos)
 
         if idx_pos.shape[0] < 1:
             break
-        x_pos = data[idx_pos, :-2]
-        x_neg = data[idx_neg, :-2]
+        x_pos = data[idx_pos, :-1]
+        x_neg = data[idx_neg, :-1]
 
         X = np.vstack((x_pos, x_neg))
         Y = np.vstack(
@@ -56,7 +55,7 @@ def build_classifiers(set_name: str, clf_type: str):
 
 def match(galery_set, probe_set, clf_type):
 
-    probe_file_path = 'features_' + probe_set + '.npy'
+    probe_file_path = 'features' + probe_set + '.npy'
     probe_data = np.load(probe_file_path)
     # shuffle probe data
     probe_data = np.random.permutation(probe_data)
@@ -79,7 +78,7 @@ def match(galery_set, probe_set, clf_type):
     clf_y = np.zeros((num_clf, 1))
 
     for i, clf_file in enumerate(clf_files):
-        with open(clf_file, 'rb') as f:
+        with open(clf_path + clf_file, 'rb') as f:
             b, bias, x_mu, x_sigma, y_mu, y_sigma = pickle.load(f)
             betas[i, :] = b
             biases[i] = bias
@@ -111,5 +110,6 @@ def match(galery_set, probe_set, clf_type):
 
 
 t = time.time()
-build_classifiers('SET1', 'svm')
+# build_classifiers('SET1', 'svm')
+# match('SET1', 'SET1', 'svm')
 print(t - time.time())
