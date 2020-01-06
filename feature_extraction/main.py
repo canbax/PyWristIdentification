@@ -2,7 +2,7 @@ import numpy as np
 from scipy import stats, signal
 from skimage.morphology import erosion
 from skimage.util import img_as_float
-import cv2
+# import cv2
 from os import listdir
 import matplotlib.pyplot as plt
 from skimage.color import rgb2gray
@@ -185,7 +185,7 @@ def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
     mappings = [settings['map1'], settings['map2']]
     radiuses = [settings['radius1'], settings['radius2']]
     neighb = settings['neighb']
-    
+
     mask4lbp = erosion(mask, np.ones((5, 5)))
     # at the end there will be 49 features for each
     features = np.array([])
@@ -219,12 +219,12 @@ def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
     maskGabor = maskGabor[rp + 1:-rp, rp + 1: -rp]
     Orient_Map = Orient_Map + 1
     Orient_Map = maskimage(Orient_Map, np.logical_not(maskGabor))
-    
+
     for j in range(len(settings['grids'])):
         f = extract_gabor(Orient_Map, settings['grids'][j])
         # features.append(f.reshape((1, f.size)))
         features = np.concatenate((features, f), axis=None)
-        
+
     return features
 
 
@@ -499,9 +499,9 @@ def extract_gabor(orient_map: np.array, grid: dict):
     return histMatrix
 
 
-def build_feature_vectors():
-    imgs_path = DB_PATH + '\\SETsegmentedAlignedWristImages\\SET1\\img'
-    masks_path = DB_PATH + '\\SETsegmentedAlignedWristImages\\SET1\\mask'
+def build_feature_vectors(set_name):
+    imgs_path = DB_PATH + '\\SETsegmentedAlignedWristImages\\' + set_name + '\\img'
+    masks_path = DB_PATH + '\\SETsegmentedAlignedWristImages\\' + set_name + '\\mask'
     imgs = listdir(imgs_path)
 
     num_grids = 7
@@ -543,17 +543,18 @@ def build_feature_vectors():
         features = extract2(I, mask, settings, gray)
 
         ch = img[-5]
-        person_id = float(img[:4])
-        wrist_id = -1
-        if ch == 'L' or ch == '1':
-            wrist_id = 0
+        # sample id is a 4 digit positive number
+        sample_id = float(img[:4])
+        # if ch == 'L' or ch == '1':
+        #     wrist_id = 0
         if ch == 'R' or ch == '2':
-            wrist_id = 1
-        features = np.append(features, [person_id, wrist_id])
+            sample_id = -sample_id
+        features = np.append(features, [sample_id])
         all_features.append(features)
-    
-    all_features = np.array(all_features)        
-    np.save('features', np.array(all_features))        
+
+    all_features = np.array(all_features)
+    np.save('features' + set_name, np.array(all_features))
+
 
 def get_sift_features(gray: np.array):
     # sift = cv2.xfeatures2d.SIFT_create()
@@ -564,6 +565,7 @@ def get_sift_features(gray: np.array):
 def test_lbp_mapping():
     print(get_lbp_mapping(8, 'riu2'))
 
+
 t = time.time()
-build_feature_vectors()
+build_feature_vectors('SET1')
 print(time.time() - t)
