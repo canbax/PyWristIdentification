@@ -91,25 +91,26 @@ def match(galery_set, probe_set, clf_type):
     resp_vec = np.zeros((num_probe, num_clf))
     s = []
     for i in range(num_probe):
-        x_i = (probe_x[i, :] - x_mus[i, :]) / x_sigmas[i, :]
-        resp = betas * x_i.T
+        x_i = (probe_x[i, :] - x_mus[0, :]) / (x_sigmas[0,:] + 1e-6)
+        resp = np.matmul(betas, x_i.T)
+        resp = resp + biases.reshape(num_clf, )
         resp_vec[i, :] = resp
         idx = np.argsort(resp[::-1])
         s.append(np.nonzero(probe_y[i] == np.unique(clf_y[idx])))
 
-    rankPP = np.zeros((1, num_probe))
+    rankPP = np.zeros((num_probe, 1))
     for i in range(num_probe):
         if len(s[i]) == 0:
             rankPP[i] = 0
         else:
             rankPP[i] = s[0]
 
-    cmc = np.zeros((1, num_probe))
+    cmc = np.zeros((num_probe, 1))
     for i in range(num_probe):
         cmc[i] = len(rankPP[rankPP <= i]) / len(rankPP)
-
+    print(cmc)
 
 t = time.time()
 # build_classifiers('SET1', 'svm')
-# match('SET1', 'SET1', 'svm')
-print(t - time.time())
+match('SET1', 'SET1', 'svm')
+print(time.time() - t)
