@@ -50,7 +50,7 @@ def build_classifiers(set_name: str, clf_type: str):
 
         f_name = set_name + '_' + clf_type + '_clf/' + str(int(p)) + '.pkl'
         with open(f_name, 'wb') as f:
-            pickle.dump([b, bias, x_mu, x_sigma, y_mu, y_sigma], f)
+            pickle.dump([b, bias, x_mu, x_sigma], f)
 
 
 def match(galery_set, probe_set, clf_type):
@@ -72,22 +72,16 @@ def match(galery_set, probe_set, clf_type):
     betas = np.zeros((num_clf, num_feature))
     biases = np.zeros((num_clf, 1))
     x_mus = np.zeros((num_clf, num_feature))
-    y_mus = np.zeros((num_clf, 1))
     x_sigmas = np.zeros((num_clf, num_feature))
-    y_sigmas = np.zeros((num_clf, 1))
     clf_y = np.zeros((num_clf, 1))
 
     for i, clf_file in enumerate(clf_files):
         with open(clf_path + clf_file, 'rb') as f:
-            b, bias, x_mu, x_sigma, y_mu, y_sigma = pickle.load(f)
-            betas[i, :] = b
-            biases[i] = bias
-            x_mus[i, :] = x_mu
-            y_mus[i] = y_mu
-            x_sigmas[i, :] = x_sigma
-            y_sigmas[i] = y_sigma
+            betas[i, :], biases[i], x_mus[i, :], x_sigmas[i, :] = pickle.load(f)
             clf_y[i] = int(clf_file[:-4])
 
+    # It should already have unique elements but anyway
+    clf_y = np.unique(clf_y)
     resp_vec = np.zeros((num_probe, num_clf))
     s = []
     for i in range(num_probe):
@@ -95,8 +89,8 @@ def match(galery_set, probe_set, clf_type):
         resp = np.matmul(betas, x_i.T)
         resp = resp + biases.reshape(num_clf, )
         resp_vec[i, :] = resp
-        idx = np.argsort(resp[::-1])
-        s.append(np.nonzero(probe_y[i] == np.unique(clf_y[idx])))
+        ordering = np.argsort(resp)[::-1]
+        s.append(np.nonzero(probe_y[i] == clf_y[ordering]))
 
     rankPP = np.zeros((num_probe, 1))
     for i in range(num_probe):
