@@ -126,6 +126,6 @@ def match(galery_set, probe_set, clf_type, clf_id: str):
 
 
 t = time.time()
-build_classifiers('SET1', 'svm')
-# match('SET1', 'SET2', 'svm', '10000')
+# build_classifiers('SET1', 'svm')
+match('SET1', 'SET2', 'svm', '1000')
 print(time.time() - t)

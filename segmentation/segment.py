@@ -117,7 +117,7 @@ def extract_superpixel_features(stats, img, adj_matrix, binaryCropMask):
     imgRGBnorm = np.divide(imgRGB, imgRGBsum)
 
     gradient_maps = get_7_gradient_maps(imgRGB)
-    minCoverPercentage = 0
+    minCoverPercentage = 0.5
     color_spaces = [imgRGB, imgRGBnorm, imgLAB, imgHSV, imgYCbCr, imgYIQ]
 
     features = []
@@ -244,7 +244,7 @@ def trainEoT(num_training_img):
         else:
             X2 = np.concatenate((X2, x2))
 
-        print(time.time() - start_time)
+    print(time.time() - start_time)
 
     Y1 = np.ones((X1.shape[0], ))
     Y2 = np.zeros((X2.shape[0], ))
@@ -261,7 +261,7 @@ def trainEoT(num_training_img):
         base_estimator=cart, n_estimators=num_trees, random_state=seed)
     results = model_selection.cross_val_score(model, X, Y, cv=kfold)
     print('-------------------------------------')
-    print(results.mean())
+    print(results.mean(), results.std())
 
 # read image and make height 200px
 
@@ -329,6 +329,6 @@ def test_adj_matrix(n, curr_img=None, segment_no=None):
 # test_adj_matrix(5)
 fname = 'img\\SEToriginalWristImages\\SET1\\0001_01_01_02_863_695_288_408_L.jpg'
 # getSuperpixelFeaturesFromFile(fname)
-trainEoT(100)
+trainEoT(1948)
 
 # test_adj_matrix(4)

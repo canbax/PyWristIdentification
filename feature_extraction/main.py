@@ -507,7 +507,7 @@ def build_feature_vectors(set_name):
     num_grids = 7
     num_ver_blocks = [7, 5, 5, 4, 3, 3, 2]
     num_hor_blocks = [5, 7, 5, 3, 4, 3, 2]
-    num_training_img = 10
+    num_training_img = 2
     num_training_img = len(imgs)
     print('num_training_img ', num_training_img)
     neighb = 8
@@ -553,7 +553,7 @@ def build_feature_vectors(set_name):
         all_features.append(features)
 
     all_features = np.array(all_features)
-    np.save('features' + set_name, np.array(all_features))
+    np.save('results/features' + set_name, np.array(all_features))
 
 
 def get_sift_features(gray: np.array):
@@ -567,5 +567,5 @@ def test_lbp_mapping():
 
 
 t = time.time()
-build_feature_vectors('SET2')
+build_feature_vectors('SET2p')
 print(time.time() - t)
