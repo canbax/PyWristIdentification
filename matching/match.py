@@ -5,7 +5,7 @@ from sklearn.cross_decomposition import PLSRegression
 from sklearn import preprocessing
 import time
 from os import listdir
-
+import matplotlib.pyplot as plt
 
 def build_classifiers(set_name: str, clf_type: str):
     file_path = 'features' + set_name + '.npy'
@@ -39,7 +39,7 @@ def build_classifiers(set_name: str, clf_type: str):
         if clf_type == 'svm':
             le = preprocessing.LabelEncoder()
             Y = le.fit_transform(Y)
-            clf = LinearSVC(max_iter=1000)
+            clf = LinearSVC(max_iter=3000)
             clf.fit(X, Y)
             bias = clf.intercept_
             b = clf.coef_
@@ -81,7 +81,8 @@ def match(galery_set, probe_set, clf_type):
             clf_y[i] = int(clf_file[:-4])
 
     # It should already have unique elements but anyway
-    clf_y = np.unique(clf_y)
+    # clf_y = np.unique(clf_y)
+    
     resp_vec = np.zeros((num_probe, num_clf))
     s = []
     for i in range(num_probe):
@@ -90,21 +91,25 @@ def match(galery_set, probe_set, clf_type):
         resp = resp + biases.reshape(num_clf, )
         resp_vec[i, :] = resp
         ordering = np.argsort(resp)[::-1]
-        s.append(np.nonzero(probe_y[i] == clf_y[ordering]))
+        s.append(np.nonzero(probe_y[i] == clf_y[ordering])[0])
 
     rankPP = np.zeros((num_probe, 1))
     for i in range(num_probe):
         if len(s[i]) == 0:
             rankPP[i] = 0
         else:
-            rankPP[i] = s[0]
+            # python uses zero indexing, rank them from 1
+            rankPP[i] = s[i][0] + 1
 
     cmc = np.zeros((num_probe, 1))
-    for i in range(num_probe):
+    for i in range(1, num_probe):
         cmc[i] = len(rankPP[rankPP <= i]) / len(rankPP)
-    print(cmc)
+    print(cmc.shape)
+    
+    plt.plot(cmc[1:30, 0])  
+    plt.show()
 
 t = time.time()
-# build_classifiers('SET1', 'svm')
-match('SET1', 'SET1', 'svm')
+# build_classifiers('SET2', 'svm')
+match('SET1', 'SET2', 'svm')
 print(time.time() - t)
