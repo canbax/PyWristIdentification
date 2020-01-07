@@ -12,6 +12,13 @@ def build_classifiers(set_name: str, clf_type: str):
     data = np.load(file_path)
     people = np.unique(data[:, -1])
 
+    bs = []
+    biases = []
+    clf_labels = []
+    x_mu = 0
+    x_sigma = 0
+    num_iter_4_svm = 10000
+    num_comp_4_pls = 5
     for p in people:
         idx_pos = data[:, -1] == p
         idx_neg = np.logical_not(idx_pos)
@@ -39,18 +46,29 @@ def build_classifiers(set_name: str, clf_type: str):
         if clf_type == 'svm':
             le = preprocessing.LabelEncoder()
             Y = le.fit_transform(Y)
-            clf = LinearSVC(max_iter=3000)
+            clf = LinearSVC(max_iter=num_iter_4_svm)
             clf.fit(X, Y)
             bias = clf.intercept_
             b = clf.coef_
         elif clf_type == 'pls':
-            pls = PLSRegression(n_components=5)
+            pls = PLSRegression(n_components=num_comp_4_pls)
             pls.fit(X, Y)
             b = pls.coef_
+        
+        bs.append(np.ravel(b))
+        biases.append(np.ravel(bias))
+        clf_labels.append(int(p))
 
-        f_name = set_name + '_' + clf_type + '_clf/' + str(int(p)) + '.pkl'
-        with open(f_name, 'wb') as f:
-            pickle.dump([b, bias, x_mu, x_sigma], f)
+    bs = np.array(bs)
+    biases = np.array(biases)
+    clf_labels = np.array(clf_labels)
+
+    i = num_iter_4_svm
+    if clf_type == 'pls':
+        i = num_comp_4_pls
+    f_name = set_name + '_' + clf_type + '_clf/clf' + i  + '.pkl'
+    with open(f_name, 'wb') as f:
+        pickle.dump([bs, biases, clf_labels, x_mu, x_sigma], f)
 
 
 def match(galery_set, probe_set, clf_type):
@@ -62,23 +80,14 @@ def match(galery_set, probe_set, clf_type):
     probe_x = probe_data[:, :-1]
     probe_y = probe_data[:, -1]
 
-    num_probe, num_feature = probe_x.shape
+    num_probe, _ = probe_x.shape
 
     clf_path = galery_set + '_' + clf_type + '_clf/'
-    clf_files = listdir(clf_path)
-    num_clf = len(clf_files)
+    # read all classifiers from 1 file
+    with open(clf_path + 'clf.pkl', 'rb') as f:
+        betas, biases, clf_y, x_mu, x_sigma = pickle.load(f)
 
-    # vectorized variables for classifiers
-    betas = np.zeros((num_clf, num_feature))
-    biases = np.zeros((num_clf, 1))
-    x_mus = np.zeros((num_clf, num_feature))
-    x_sigmas = np.zeros((num_clf, num_feature))
-    clf_y = np.zeros((num_clf, 1))
-
-    for i, clf_file in enumerate(clf_files):
-        with open(clf_path + clf_file, 'rb') as f:
-            betas[i, :], biases[i], x_mus[i, :], x_sigmas[i, :] = pickle.load(f)
-            clf_y[i] = int(clf_file[:-4])
+    num_clf = len(clf_y)
 
     # It should already have unique elements but anyway
     # clf_y = np.unique(clf_y)
@@ -86,7 +95,7 @@ def match(galery_set, probe_set, clf_type):
     resp_vec = np.zeros((num_probe, num_clf))
     s = []
     for i in range(num_probe):
-        x_i = (probe_x[i, :] - x_mus[0, :]) / (x_sigmas[0,:] + 1e-6)
+        x_i = (probe_x[i, :] - x_mu) / (x_sigma + 1e-6)
         resp = np.matmul(betas, x_i.T)
         resp = resp + biases.reshape(num_clf, )
         resp_vec[i, :] = resp
@@ -103,13 +112,16 @@ def match(galery_set, probe_set, clf_type):
 
     cmc = np.zeros((num_probe, 1))
     for i in range(1, num_probe):
-        cmc[i] = len(rankPP[rankPP <= i]) / len(rankPP)
+        cmc[i] = len(rankPP[rankPP <= i]) / len(rankPP) * 100
     print(cmc.shape)
     
     plt.plot(cmc[1:30, 0])  
+    plt.xlabel( 'rank' )
+    plt.ylabel( 'rank-m identification rate (%)' )
+    plt.title( 'set1-set2 svm 3000 iteration' )
     plt.show()
 
 t = time.time()
-# build_classifiers('SET2', 'svm')
-match('SET1', 'SET2', 'svm')
+build_classifiers('SET1', 'pls')
+# match('SET1', 'SET2', 'svm')
 print(time.time() - t)
