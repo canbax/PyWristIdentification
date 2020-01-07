@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 
 def build_classifiers(set_name: str, clf_type: str):
-    file_path = 'features' + set_name + '.npy'
+    file_path = 'results/features' + set_name + '.npy'
     data = np.load(file_path)
     people = np.unique(data[:, -1])
 
@@ -68,14 +68,14 @@ def build_classifiers(set_name: str, clf_type: str):
     if clf_type == 'pls':
         i = num_comp_4_pls
     i = str(i)
-    f_name = set_name + '_' + clf_type + '_clf/clf' + i + '.pkl'
+    f_name = 'results/' + set_name + '_' + clf_type + '_clf/clf' + i + '.pkl'
     with open(f_name, 'wb') as f:
         pickle.dump([bs, biases, clf_labels, x_mu, x_sigma], f)
 
 
 def match(galery_set, probe_set, clf_type, clf_id: str):
 
-    probe_file_path = 'features' + probe_set + '.npy'
+    probe_file_path = 'results/features' + probe_set + '.npy'
     probe_data = np.load(probe_file_path)
     # shuffle probe data
     probe_data = np.random.permutation(probe_data)
@@ -84,7 +84,7 @@ def match(galery_set, probe_set, clf_type, clf_id: str):
 
     num_probe, _ = probe_x.shape
 
-    clf_path = galery_set + '_' + clf_type + '_clf/'
+    clf_path = 'results/' + galery_set + '_' + clf_type + '_clf/'
     # read all classifiers from 1 file
     with open(clf_path + 'clf' + clf_id + '.pkl', 'rb') as f:
         betas, biases, clf_y, x_mu, x_sigma = pickle.load(f)
@@ -126,6 +126,6 @@ def match(galery_set, probe_set, clf_type, clf_id: str):
 
 
 t = time.time()
-# build_classifiers('SET1', 'svm')
-match('SET1', 'SET2', 'svm', '1000')
+build_classifiers('SET1p', 'pls')
+# match('SET1p', 'SET2', 'svm', '1000')
 print(time.time() - t)
