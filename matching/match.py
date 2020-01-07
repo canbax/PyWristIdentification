@@ -7,6 +7,7 @@ import time
 from os import listdir
 import matplotlib.pyplot as plt
 
+
 def build_classifiers(set_name: str, clf_type: str):
     file_path = 'features' + set_name + '.npy'
     data = np.load(file_path)
@@ -17,7 +18,7 @@ def build_classifiers(set_name: str, clf_type: str):
     clf_labels = []
     x_mu = 0
     x_sigma = 0
-    num_iter_4_svm = 10000
+    num_iter_4_svm = 1000
     num_comp_4_pls = 5
     for p in people:
         idx_pos = data[:, -1] == p
@@ -54,7 +55,7 @@ def build_classifiers(set_name: str, clf_type: str):
             pls = PLSRegression(n_components=num_comp_4_pls)
             pls.fit(X, Y)
             b = pls.coef_
-        
+
         bs.append(np.ravel(b))
         biases.append(np.ravel(bias))
         clf_labels.append(int(p))
@@ -66,12 +67,13 @@ def build_classifiers(set_name: str, clf_type: str):
     i = num_iter_4_svm
     if clf_type == 'pls':
         i = num_comp_4_pls
-    f_name = set_name + '_' + clf_type + '_clf/clf' + i  + '.pkl'
+    i = str(i)
+    f_name = set_name + '_' + clf_type + '_clf/clf' + i + '.pkl'
     with open(f_name, 'wb') as f:
         pickle.dump([bs, biases, clf_labels, x_mu, x_sigma], f)
 
 
-def match(galery_set, probe_set, clf_type):
+def match(galery_set, probe_set, clf_type, clf_id: str):
 
     probe_file_path = 'features' + probe_set + '.npy'
     probe_data = np.load(probe_file_path)
@@ -84,14 +86,14 @@ def match(galery_set, probe_set, clf_type):
 
     clf_path = galery_set + '_' + clf_type + '_clf/'
     # read all classifiers from 1 file
-    with open(clf_path + 'clf.pkl', 'rb') as f:
+    with open(clf_path + 'clf' + clf_id + '.pkl', 'rb') as f:
         betas, biases, clf_y, x_mu, x_sigma = pickle.load(f)
 
     num_clf = len(clf_y)
 
     # It should already have unique elements but anyway
     # clf_y = np.unique(clf_y)
-    
+
     resp_vec = np.zeros((num_probe, num_clf))
     s = []
     for i in range(num_probe):
@@ -110,18 +112,20 @@ def match(galery_set, probe_set, clf_type):
             # python uses zero indexing, rank them from 1
             rankPP[i] = s[i][0] + 1
 
-    cmc = np.zeros((num_probe, 1))
-    for i in range(1, num_probe):
+    max_rank = 30
+    cmc = np.zeros((max_rank, 1))
+    for i in range(1, max_rank):
         cmc[i] = len(rankPP[rankPP <= i]) / len(rankPP) * 100
     print(cmc.shape)
-    
-    plt.plot(cmc[1:30, 0])  
-    plt.xlabel( 'rank' )
-    plt.ylabel( 'rank-m identification rate (%)' )
-    plt.title( 'set1-set2 svm 3000 iteration' )
+
+    plt.plot(np.arange(max_rank)[1:max_rank], cmc[1:max_rank, 0])
+    plt.xlabel('rank')
+    plt.ylabel('rank-m identification rate (%)')
+    plt.title('set1-set2 ' +  clf_type + ' ' + clf_id)
     plt.show()
 
+
 t = time.time()
-build_classifiers('SET1', 'pls')
-# match('SET1', 'SET2', 'svm')
+build_classifiers('SET1', 'svm')
+# match('SET1', 'SET2', 'svm', '10000')
 print(time.time() - t)
