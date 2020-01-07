@@ -8,7 +8,7 @@ from os import listdir
 import matplotlib.pyplot as plt
 
 
-def build_classifiers(set_name: str, clf_type: str):
+def build_classifiers(set_name: str, clf_type: str, clf_suffix=''):
     file_path = 'results/features' + set_name + '.npy'
     data = np.load(file_path)
     people = np.unique(data[:, -1])
@@ -47,7 +47,7 @@ def build_classifiers(set_name: str, clf_type: str):
         if clf_type == 'svm':
             le = preprocessing.LabelEncoder()
             Y = le.fit_transform(Y)
-            clf = LinearSVC(max_iter=num_iter_4_svm)
+            clf = LinearSVC(max_iter=num_iter_4_svm, class_weight='balanced')
             clf.fit(X, Y)
             bias = clf.intercept_
             b = clf.coef_
@@ -68,12 +68,13 @@ def build_classifiers(set_name: str, clf_type: str):
     if clf_type == 'pls':
         i = num_comp_4_pls
     i = str(i)
-    f_name = 'results/' + set_name + '_' + clf_type + '_clf/clf' + i + '.pkl'
+    f_name = 'results/' + set_name + '_' + \
+        clf_type + '_clf/clf' + i + clf_suffix + '.pkl'
     with open(f_name, 'wb') as f:
         pickle.dump([bs, biases, clf_labels, x_mu, x_sigma], f)
 
 
-def match(galery_set, probe_set, clf_type, clf_id: str):
+def match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', cnt=0, zero_betas=[], legend_str=''):
 
     probe_file_path = 'results/features' + probe_set + '.npy'
     probe_data = np.load(probe_file_path)
@@ -86,7 +87,7 @@ def match(galery_set, probe_set, clf_type, clf_id: str):
 
     clf_path = 'results/' + galery_set + '_' + clf_type + '_clf/'
     # read all classifiers from 1 file
-    with open(clf_path + 'clf' + clf_id + '.pkl', 'rb') as f:
+    with open(clf_path + 'clf' + clf_id + clf_suffix + '.pkl', 'rb') as f:
         betas, biases, clf_y, x_mu, x_sigma = pickle.load(f)
 
     num_clf = len(clf_y)
@@ -96,6 +97,9 @@ def match(galery_set, probe_set, clf_type, clf_id: str):
 
     resp_vec = np.zeros((num_probe, num_clf))
     s = []
+    if len(zero_betas) > 0:
+        betas[:, zero_betas] = 0
+        
     for i in range(num_probe):
         x_i = (probe_x[i, :] - x_mu) / (x_sigma + 1e-6)
         resp = np.matmul(betas, x_i.T)
@@ -118,14 +122,27 @@ def match(galery_set, probe_set, clf_type, clf_id: str):
         cmc[i] = len(rankPP[rankPP <= i]) / len(rankPP) * 100
     print(cmc.shape)
 
-    plt.plot(np.arange(max_rank)[1:max_rank], cmc[1:max_rank, 0])
-    plt.xlabel('rank')
-    plt.ylabel('rank-m identification rate (%)')
-    plt.title('set1-set2 ' +  clf_type + ' ' + clf_id)
-    plt.show()
+    clf_str = galery_set + ' ' + clf_type + ' ' + clf_suffix + ' ' + clf_id + ' ' + legend_str
+    plt.plot(np.arange(max_rank)[1:max_rank],
+             cmc[1:max_rank, 0], label=clf_str, linestyle=['-', '--', '-.', ':'][cnt], linewidth=8)
 
 
 t = time.time()
-build_classifiers('SET1p', 'pls')
-# match('SET1p', 'SET2', 'svm', '1000')
+# build_classifiers('SET1', 'svm', 'balanced')
+
+font_size = 32
+plt.figure()
+plt.title('Effectiveness of features on PLS', fontsize=font_size)
+plt.tick_params(labelsize=font_size)
+plt.xlabel('rank', fontsize=font_size)
+plt.ylabel('rank-m identification rate (%)', fontsize=font_size)
+
+match('SET1', 'SET2', 'pls', '5', '', 0, np.arange(13074), 'Gabon features')
+match('SET1', 'SET2', 'pls', '5', '', 1, np.arange(13074, 15186), 'LBP features')
+match('SET1', 'SET2', 'pls', '5', '', 2, [], 'All features')
+
+legend = plt.legend(fontsize=font_size*3/4)
+
+plt.show()
+
 print(time.time() - t)
