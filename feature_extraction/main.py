@@ -182,29 +182,16 @@ def maskimage(im, mask, col=0):
 
 
 def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
-    mappings = [settings['map1'], settings['map2']]
-    radiuses = [settings['radius1'], settings['radius2']]
-    neighb = settings['neighb']
 
-    mask4lbp = erosion(mask, np.ones((5, 5)))
     # at the end there will be 49 features for each
     features = np.array([])
-    for c in range(img.shape[2]):
-        bin_nums = [10, 10, 59, 59, 59, 59, 59]
-        for j in range(len(settings['grids'])):
-            r = radiuses[0]
-            m = mappings[0]
-            if j > 1:
-                r = radiuses[1]
-                m = mappings[1]
-            F_C_ = lbp(img[:, :, c], r, neighb, m)
-            F_C_ = F_C_[r:-r, r:-r]
-            F_C_ = F_C_ + 1
-            F_C_ = maskimage(F_C_, np.logical_not(mask4lbp))
-            f = extract_lbp(F_C_, settings['grids'][j], bin_nums[j])
-            # features.append(f.reshape((1, f.size)))
-            features = np.concatenate((features, f), axis=None)
+    features = add_lbp_features(img, mask, settings, features)
+    # features = add_gabor_features(img, mask, settings, features)
 
+    return features
+
+
+def add_gabor_features(img, mask, settings, features):
     gray2 = (0.2989 * img[:, :, 0]) + (0.5870 *
                                        img[:, :, 1]) + (0.1140 * img[:, :, 2])
 
@@ -224,6 +211,32 @@ def extract2(img: np.array, mask: np.array, settings: dict, gray: np.array):
         f = extract_gabor(Orient_Map, settings['grids'][j])
         # features.append(f.reshape((1, f.size)))
         features = np.concatenate((features, f), axis=None)
+
+    return features
+
+
+def add_lbp_features(img, mask, settings, features):
+    mappings = [settings['map1'], settings['map2']]
+    radiuses = [settings['radius1'], settings['radius2']]
+    neighb = settings['neighb']
+
+    mask4lbp = erosion(mask, np.ones((5, 5)))
+
+    for c in range(img.shape[2]):
+        bin_nums = [10, 10, 59, 59, 59, 59, 59]
+        for j in range(len(settings['grids'])):
+            r = radiuses[0]
+            m = mappings[0]
+            if j > 1:
+                r = radiuses[1]
+                m = mappings[1]
+            F_C_ = lbp(img[:, :, c], r, neighb, m)
+            F_C_ = F_C_[r:-r, r:-r]
+            F_C_ = F_C_ + 1
+            F_C_ = maskimage(F_C_, np.logical_not(mask4lbp))
+            f = extract_lbp(F_C_, settings['grids'][j], bin_nums[j])
+            # features.append(f.reshape((1, f.size)))
+            features = np.concatenate((features, f), axis=None)
 
     return features
 
@@ -371,9 +384,8 @@ def vein_gabor_enhancement(img, scale):
     No_of_Orientation = 16  # in wrist paper 16 oreientations
     No_of_Scale = len(scale)
     a = scale
-    Gr, Gi = Gabor(0, 1.5, 1, 200, a[No_of_Scale-1])  # 1.5
+    Gr, _ = Gabor(0, 1.5, 1, 200, a[No_of_Scale-1])  # 1.5
     p = Energy_check(Gr)
-    p_1 = p+1
 
     Gabor_Matrix_Gr = np.zeros(
         (2*p + 1, 2*p + 1, No_of_Orientation, No_of_Scale))
@@ -383,7 +395,7 @@ def vein_gabor_enhancement(img, scale):
     for s in range(No_of_Scale):
         ang_count = 0
         for ang in range(0, 179, int(np.ceil(180 / No_of_Orientation))):
-            Gr, Gi = Gabor(ang, 1.5, 1, p, a[s])  # 1.5
+            Gr, _ = Gabor(ang, 1.5, 1, p, a[s])  # 1.5
             Gabor_Matrix_Gr[:, :, ang_count, s] = Gr
             ang_count = ang_count + 1
             if ang_count == No_of_Orientation:
@@ -499,6 +511,18 @@ def extract_gabor(orient_map: np.array, grid: dict):
     return histMatrix
 
 
+def get_sift_features(gray: np.array):
+    # sift = cv2.xfeatures2d.SIFT_create()
+    # _, des = sift.detectAndCompute(gray, None)
+    # there is library named vl_feat in matlab. The paper uses that library
+    # I couldn't find any implementation for that
+    pass
+
+
+def test_lbp_mapping():
+    print(get_lbp_mapping(8, 'riu2'))
+
+
 def build_feature_vectors(set_name):
     imgs_path = DB_PATH + '\\SETsegmentedAlignedWristImages\\' + set_name + '\\img'
     masks_path = DB_PATH + '\\SETsegmentedAlignedWristImages\\' + set_name + '\\mask'
@@ -553,19 +577,9 @@ def build_feature_vectors(set_name):
         all_features.append(features)
 
     all_features = np.array(all_features)
-    np.save('results/features' + set_name, np.array(all_features))
-
-
-def get_sift_features(gray: np.array):
-    # sift = cv2.xfeatures2d.SIFT_create()
-    # _, des = sift.detectAndCompute(gray, None)
-    a = 1
-
-
-def test_lbp_mapping():
-    print(get_lbp_mapping(8, 'riu2'))
+    np.save('results/features_lbp' + set_name, np.array(all_features))
 
 
 t = time.time()
-build_feature_vectors('SET2p')
+build_feature_vectors('SET1p')
 print(time.time() - t)

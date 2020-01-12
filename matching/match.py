@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 
 def build_classifiers(set_name: str, clf_type: str, clf_suffix=''):
-    file_path = 'results/features' + set_name + '.npy'
+    file_path = 'results/features_lbp' + set_name + '.npy'
     data = np.load(file_path)
     people = np.unique(data[:, -1])
 
@@ -128,21 +128,21 @@ def match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', cnt=0, ze
 
 
 t = time.time()
-# build_classifiers('SET1', 'svm', 'balanced')
+build_classifiers('SET1p', 'svm', 'lbp')
 
-font_size = 32
-plt.figure()
-plt.title('Effectiveness of features on PLS', fontsize=font_size)
-plt.tick_params(labelsize=font_size)
-plt.xlabel('rank', fontsize=font_size)
-plt.ylabel('rank-m identification rate (%)', fontsize=font_size)
+# font_size = 32
+# plt.figure()
+# plt.title('Effectiveness of features on PLS', fontsize=font_size)
+# plt.tick_params(labelsize=font_size)
+# plt.xlabel('rank', fontsize=font_size)
+# plt.ylabel('rank-m identification rate (%)', fontsize=font_size)
 
-match('SET1', 'SET2', 'pls', '5', '', 0, np.arange(13074), 'Gabon features')
-match('SET1', 'SET2', 'pls', '5', '', 1, np.arange(13074, 15186), 'LBP features')
-match('SET1', 'SET2', 'pls', '5', '', 2, [], 'All features')
+# match('SET1', 'SET2', 'pls', '5', '', 0, np.arange(13074), 'Gabon features')
+# match('SET1', 'SET2', 'pls', '5', '', 1, np.arange(13074, 15186), 'LBP features')
+# match('SET1', 'SET2', 'pls', '5', '', 2, [], 'All features')
 
-legend = plt.legend(fontsize=font_size*3/4)
+# legend = plt.legend(fontsize=font_size*3/4)
 
-plt.show()
+# plt.show()
 
 print(time.time() - t)
