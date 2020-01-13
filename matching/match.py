@@ -76,7 +76,7 @@ def build_classifiers(set_name: str, clf_type: str, clf_suffix=''):
 
 def match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', cnt=0, zero_betas=[], legend_str=''):
 
-    probe_file_path = 'results/features' + probe_set + '.npy'
+    probe_file_path = 'results/features_' + clf_suffix + probe_set + '.npy'
     probe_data = np.load(probe_file_path)
     # shuffle probe data
     probe_data = np.random.permutation(probe_data)
@@ -127,22 +127,25 @@ def match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', cnt=0, ze
              cmc[1:max_rank, 0], label=clf_str, linestyle=['-', '--', '-.', ':'][cnt], linewidth=8)
 
 
+def meta_match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', line_style=0, legend_str=''):
+    pass
+
+
 t = time.time()
-build_classifiers('SET1p', 'svm', 'lbp')
+# build_classifiers('SET1p', 'svm', 'lbp')
 
-# font_size = 32
-# plt.figure()
-# plt.title('Effectiveness of features on PLS', fontsize=font_size)
-# plt.tick_params(labelsize=font_size)
-# plt.xlabel('rank', fontsize=font_size)
-# plt.ylabel('rank-m identification rate (%)', fontsize=font_size)
+font_size = 32
+plt.figure()
+plt.title('Effectiveness of features on PLS', fontsize=font_size)
+plt.tick_params(labelsize=font_size)
+plt.xlabel('rank', fontsize=font_size)
+plt.ylabel('rank-m identification rate (%)', fontsize=font_size)
 
-# match('SET1', 'SET2', 'pls', '5', '', 0, np.arange(13074), 'Gabon features')
-# match('SET1', 'SET2', 'pls', '5', '', 1, np.arange(13074, 15186), 'LBP features')
-# match('SET1', 'SET2', 'pls', '5', '', 2, [], 'All features')
+match('SET1p', 'SET2p', 'svm', '1000', 'gabor', 0, [], 'Gabon features')
+# match('SET1p', 'SET2p', 'svm', '1000', 'lbp', 1, [], 'LBP features')
 
-# legend = plt.legend(fontsize=font_size*3/4)
+legend = plt.legend(fontsize=font_size*3/4)
 
-# plt.show()
+plt.show()
 
 print(time.time() - t)
