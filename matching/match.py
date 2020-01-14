@@ -74,7 +74,68 @@ def build_classifiers(set_name: str, clf_type: str, clf_suffix=''):
         pickle.dump([bs, biases, clf_labels, x_mu, x_sigma], f)
 
 
+def get_response_and_ranking(num_probe, clf_file_name, probe_x, probe_y, zero_betas=[]):
+
+    with open(clf_file_name, 'rb') as f:
+        betas, biases, clf_y, x_mu, x_sigma = pickle.load(f)
+
+    num_clf = len(clf_y)
+    resp_vec = np.zeros((num_probe, num_clf))
+    s = []
+    if len(zero_betas) > 0:
+        betas[:, zero_betas] = 0
+
+    for i in range(num_probe):
+        x_i = (probe_x[i, :] - x_mu) / (x_sigma + 1e-6)
+        resp = np.matmul(betas, x_i.T)
+        resp = resp + biases.reshape(num_clf, )
+        resp_vec[i, :] = resp
+        ordering = np.argsort(resp)[::-1]
+        s.append(np.nonzero(probe_y[i] == clf_y[ordering])[0])
+
+    return resp_vec, s
+
+
 def match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', cnt=0, zero_betas=[], legend_str=''):
+
+    probe_file_path = 'results/features_' + clf_suffix + probe_set + '.npy'
+    probe_data = np.load(probe_file_path)
+    # shuffle probe data
+    probe_data = np.random.permutation(probe_data)
+    probe_x = probe_data[:, :-1]
+    probe_y = probe_data[:, -1]
+
+    num_probe, _ = probe_x.shape
+
+    clf_path = 'results/' + galery_set + '_' + clf_type + '_clf/'
+    # read all classifiers from 1 file
+    clf_file_name = clf_path + 'clf' + clf_id + clf_suffix + '.pkl'
+    resp_vec, s = get_response_and_ranking(
+        num_probe, clf_file_name, probe_x, probe_y, zero_betas)
+
+    rankPP = np.zeros((num_probe, 1))
+    for i in range(num_probe):
+        if len(s[i]) == 0:
+            rankPP[i] = 0
+        else:
+            # python uses zero indexing, rank them from 1
+            rankPP[i] = s[i][0] + 1
+
+    max_rank = 30
+    cmc = np.zeros((max_rank, 1))
+    for i in range(1, max_rank):
+        cmc[i] = len(rankPP[rankPP <= i]) / len(rankPP) * 100
+    print(cmc.shape)
+
+    clf_str = galery_set + ' ' + clf_type + ' ' + \
+        clf_suffix + ' ' + clf_id + ' ' + legend_str
+    plt.plot(np.arange(max_rank)[1:max_rank],
+             cmc[1:max_rank, 0], label=clf_str, linestyle=['-', '--', '-.', ':'][cnt], linewidth=8)
+
+
+def meta_match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', line_style=0, legend_str=''):
+    n_outlier = 1
+    tail_factor = .2  # fraction of the gallery size that will determine tail's length
 
     probe_file_path = 'results/features_' + clf_suffix + probe_set + '.npy'
     probe_data = np.load(probe_file_path)
@@ -92,44 +153,8 @@ def match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', cnt=0, ze
 
     num_clf = len(clf_y)
 
-    # It should already have unique elements but anyway
-    # clf_y = np.unique(clf_y)
-
-    resp_vec = np.zeros((num_probe, num_clf))
-    s = []
-    if len(zero_betas) > 0:
-        betas[:, zero_betas] = 0
-        
-    for i in range(num_probe):
-        x_i = (probe_x[i, :] - x_mu) / (x_sigma + 1e-6)
-        resp = np.matmul(betas, x_i.T)
-        resp = resp + biases.reshape(num_clf, )
-        resp_vec[i, :] = resp
-        ordering = np.argsort(resp)[::-1]
-        s.append(np.nonzero(probe_y[i] == clf_y[ordering])[0])
-
-    rankPP = np.zeros((num_probe, 1))
-    for i in range(num_probe):
-        if len(s[i]) == 0:
-            rankPP[i] = 0
-        else:
-            # python uses zero indexing, rank them from 1
-            rankPP[i] = s[i][0] + 1
-
-    max_rank = 30
-    cmc = np.zeros((max_rank, 1))
-    for i in range(1, max_rank):
-        cmc[i] = len(rankPP[rankPP <= i]) / len(rankPP) * 100
-    print(cmc.shape)
-
-    clf_str = galery_set + ' ' + clf_type + ' ' + clf_suffix + ' ' + clf_id + ' ' + legend_str
-    plt.plot(np.arange(max_rank)[1:max_rank],
-             cmc[1:max_rank, 0], label=clf_str, linestyle=['-', '--', '-.', ':'][cnt], linewidth=8)
-
-
-def meta_match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', line_style=0, legend_str=''):
-    pass
-
+    n2 = int(round(num_clf * tail_factor))
+    
 
 t = time.time()
 # build_classifiers('SET1p', 'svm', 'lbp')
