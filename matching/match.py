@@ -137,25 +137,32 @@ def meta_match(galery_set, probe_set, clf_type, clf_id: str, clf_suffix='', line
     n_outlier = 1
     tail_factor = .2  # fraction of the gallery size that will determine tail's length
 
-    probe_file_path = 'results/features_' + clf_suffix + probe_set + '.npy'
-    probe_data = np.load(probe_file_path)
-    # shuffle probe data
-    probe_data = np.random.permutation(probe_data)
-    probe_x = probe_data[:, :-1]
-    probe_y = probe_data[:, -1]
-
-    num_probe, _ = probe_x.shape
-
-    clf_path = 'results/' + galery_set + '_' + clf_type + '_clf/'
-    # read all classifiers from 1 file
-    with open(clf_path + 'clf' + clf_id + clf_suffix + '.pkl', 'rb') as f:
-        betas, biases, clf_y, x_mu, x_sigma = pickle.load(f)
-
-    num_clf = len(clf_y)
-
-    n2 = int(round(num_clf * tail_factor))
+    p1 = 'results/SET1'
+    clf_paths = [p1 + '_pls_clf/clf5.pkl', p1 + '_svm_clf/clf1000.pkl',
+                 p1 + 'p_pls_clf/clf5.pkl', p1 + 'p_svm_clf/clf1000.pkl']
+    p2 = 'results/features_SET2'
+    probe_paths = [p2 + '.npy', p2 + '.npy', p2 + 'p.npy', p2 + '2.npy']
     
+    responses = []
+    for i, clf_path in  enumerate(clf_paths):
+        probe_data = np.load(probe_paths[i])
+        # shuffle probe data
+        probe_data = np.random.permutation(probe_data)
+        probe_x = probe_data[:, :-1]
+        probe_y = probe_data[:, -1]
 
+        r, _ = get_response_and_ranking(probe_x.shape[0], clf_path, probe_x, probe_y)
+        responses.append(r)
+
+    num_clf = responses[0].shape[0]
+    n2 = int(round(num_clf * tail_factor))
+
+    for i in range(num_clf):
+        d1 = responses[0][i, :] + np.abs(np.min(responses[0][i, :]))
+        d2 = responses[1][i, :] + np.abs(np.min(responses[1][i, :]))
+        d3 = responses[2][i, :] + np.abs(np.min(responses[2][i, :]))
+        d4 = responses[3][i, :] + np.abs(np.min(responses[3][i, :]))
+        
 t = time.time()
 # build_classifiers('SET1p', 'svm', 'lbp')
 
